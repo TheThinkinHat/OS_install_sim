@@ -1274,6 +1274,8 @@ function MacDesktop({ userName, computerName, onRestart, officeInstalled, onInst
   const [openApps, setOpenApps] = useState<OfficeAppName[]>([]);
   const [activeApp, setActiveApp] = useState<OfficeAppName | null>(null);
   const [showSpotlight, setShowSpotlight] = useState(false);
+  const [showAppleMenu, setShowAppleMenu] = useState(false);
+  const [showShutdownDialog, setShowShutdownDialog] = useState(false);
 
   const openOfficeApp = (appName: OfficeAppName) => {
     if (!openApps.includes(appName)) setOpenApps([...openApps, appName]);
@@ -1315,11 +1317,22 @@ function MacDesktop({ userName, computerName, onRestart, officeInstalled, onInst
       </div>
 
       {/* Menu Bar */}
-      <div className="relative z-50 h-7 bg-white/80 backdrop-blur-xl border-b border-gray-300/50 flex items-center px-4 text-xs text-gray-800">
+      <div 
+        className="relative z-50 h-7 bg-white/80 backdrop-blur-xl border-b border-gray-300/50 flex items-center px-4 text-xs text-gray-800"
+        onClick={() => showAppleMenu && setShowAppleMenu(false)}
+      >
         <div className="flex items-center gap-4 flex-1">
-          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.82M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
-          </svg>
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowAppleMenu(!showAppleMenu);
+            }}
+            className="hover:bg-gray-200/50 px-1 rounded"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.82M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+            </svg>
+          </button>
           <span className="font-semibold">Finder</span>
           <span>File</span>
           <span>Edit</span>
@@ -1337,6 +1350,82 @@ function MacDesktop({ userName, computerName, onRestart, officeInstalled, onInst
           <span>{new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}</span>
         </div>
       </div>
+
+      {/* Apple Menu Dropdown */}
+      {showAppleMenu && (
+        <div className="absolute top-7 left-4 z-50 bg-white/95 backdrop-blur-xl rounded-lg shadow-2xl border border-gray-300 py-1 w-56">
+          <div className="px-3 py-1.5 text-sm text-gray-800 hover:bg-blue-500 hover:text-white cursor-pointer">About This Mac</div>
+          <div className="border-t border-gray-200 my-1"></div>
+          <div className="px-3 py-1.5 text-sm text-gray-800 hover:bg-blue-500 hover:text-white cursor-pointer">System Preferences...</div>
+          <div className="px-3 py-1.5 text-sm text-gray-800 hover:bg-blue-500 hover:text-white cursor-pointer">App Store...</div>
+          <div className="border-t border-gray-200 my-1"></div>
+          <div className="px-3 py-1.5 text-sm text-gray-800 hover:bg-blue-500 hover:text-white cursor-pointer">Recent Items</div>
+          <div className="border-t border-gray-200 my-1"></div>
+          <div className="px-3 py-1.5 text-sm text-gray-800 hover:bg-blue-500 hover:text-white cursor-pointer">Force Quit Finder...</div>
+          <div className="border-t border-gray-200 my-1"></div>
+          <div className="px-3 py-1.5 text-sm text-gray-800 hover:bg-blue-500 hover:text-white cursor-pointer">Sleep</div>
+          <div className="px-3 py-1.5 text-sm text-gray-800 hover:bg-blue-500 hover:text-white cursor-pointer">Restart...</div>
+          <div 
+            onClick={() => {
+              setShowAppleMenu(false);
+              setShowShutdownDialog(true);
+            }}
+            className="px-3 py-1.5 text-sm text-gray-800 hover:bg-blue-500 hover:text-white cursor-pointer"
+          >
+            Shut Down...
+          </div>
+          <div className="border-t border-gray-200 my-1"></div>
+          <div 
+            onClick={() => {
+              setShowAppleMenu(false);
+              onRestart();
+            }}
+            className="px-3 py-1.5 text-sm text-gray-800 hover:bg-blue-500 hover:text-white cursor-pointer"
+          >
+            Lock Screen
+          </div>
+          <div 
+            onClick={() => {
+              setShowAppleMenu(false);
+              onRestart();
+            }}
+            className="px-3 py-1.5 text-sm text-gray-800 hover:bg-blue-500 hover:text-white cursor-pointer"
+          >
+            Log Out {userName}...
+          </div>
+        </div>
+      )}
+
+      {/* Shutdown Dialog */}
+      {showShutdownDialog && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-96">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-semibold text-gray-800 mb-2">Shut Down Your Mac?</h2>
+              <p className="text-sm text-gray-600">Are you sure you want to shut down your computer?</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowShutdownDialog(false)}
+                className="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onRestart}
+                className="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium"
+              >
+                Shut Down
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Desktop Icons */}
       <div className="relative z-10 p-3 grid grid-cols-1 gap-2 w-20 ml-auto">
