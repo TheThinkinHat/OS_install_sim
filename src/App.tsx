@@ -13,8 +13,8 @@ export default function App() {
 
   const handleSelectOS = (os: OSType) => {
     setSelectedOS(os);
-    // Start Windows 7, Windows 10, and Ubuntu at BIOS, others at boot
-    setScreen((os === 'windows7' || os === 'windows10' || os === 'ubuntu') ? 'bios' : 'boot');
+    // Start Windows 7, Windows 10, Windows 11, and Ubuntu at BIOS, others at boot
+    setScreen((os === 'windows7' || os === 'windows10' || os === 'windows11' || os === 'ubuntu') ? 'bios' : 'boot');
     setOfficeInstalled(false);
     setOfficePhase('none');
   };
@@ -87,7 +87,8 @@ export default function App() {
   if (selectedOS === 'windows11') {
     return (
       <div className="w-full h-screen overflow-hidden bg-black">
-        {screen === 'boot' && <Win11Install onComplete={(name, comp) => { setUserName(name); setComputerName(comp); setScreen('desktop'); }} onBack={handleBackToLanding} />}
+        {screen === 'bios' && <Win11BIOS onExit={() => setScreen('boot')} onBack={handleBackToLanding} />}
+        {screen === 'boot' && <Win11Install onComplete={(name, comp) => { setUserName(name); setComputerName(comp); setScreen('desktop'); }} onBack={() => setScreen('bios')} />}
         {screen === 'desktop' && (
           <Win11Desktop 
             userName={userName}
@@ -776,6 +777,330 @@ function UbuntuBIOS({ onExit, onBack }: { onExit: () => void; onBack: () => void
 }
 
 // Windows 10 BIOS Setup Screen
+// Windows 11 BIOS Setup Screen
+function Win11BIOS({ onExit, onBack }: { onExit: () => void; onBack: () => void }) {
+  const [activeTab, setActiveTab] = useState(0);
+  const [selectedRow, setSelectedRow] = useState(0);
+  const [showSaveConfirm, setShowSaveConfirm] = useState<'save' | 'discard' | 'defaults' | null>(null);
+
+  const tabs = ['Main', 'Advanced', 'Boot', 'Security', 'Power', 'Exit'];
+
+  type BIOSItem = {
+    label: string;
+    value?: string;
+    type?: 'header' | 'spacer';
+    editable?: boolean;
+    action?: 'save' | 'discard' | 'defaults';
+  };
+
+  const mainContent: BIOSItem[] = [
+    { label: 'System Information', type: 'header' },
+    { label: 'BIOS Vendor', value: 'American Megatrends International' },
+    { label: 'Core Version', value: '5.21' },
+    { label: 'Compliancy', value: 'UEFI 2.9; PI 1.7' },
+    { label: 'Project Version', value: 'Z690 AORUS ELITE AX v2.0' },
+    { label: 'Build Date and Time', value: '11/08/2021 16:28:45' },
+    { label: '', type: 'spacer' },
+    { label: 'Processor Information', type: 'header' },
+    { label: 'Name', value: '12th Gen Intel(R) Core(TM) i7-12700K' },
+    { label: 'Frequency', value: '3600 MHz (Turbo: 5.0 GHz)' },
+    { label: 'Microcode Revision', value: '0x2E' },
+    { label: 'Cores / Threads', value: '12 Cores / 20 Threads' },
+    { label: '', type: 'spacer' },
+    { label: 'Memory Information', type: 'header' },
+    { label: 'Total Memory', value: '32768 MB (DDR5)' },
+    { label: 'Memory Speed', value: '4800 MHz' },
+    { label: 'Memory Channels', value: 'Dual Channel' },
+  ];
+
+  const advancedContent: BIOSItem[] = [
+    { label: 'CPU Configuration', type: 'header' },
+    { label: 'Intel Virtualization Technology', value: '[Enabled]', editable: true },
+    { label: 'Intel Turbo Boost Max 3.0', value: '[Enabled]', editable: true },
+    { label: 'Active Processor Cores', value: '[All]', editable: true },
+    { label: 'Hyper-Threading', value: '[Enabled]', editable: true },
+    { label: 'Intel Speed Shift Technology', value: '[Enabled]', editable: true },
+    { label: '', type: 'spacer' },
+    { label: 'PCIe Configuration', type: 'header' },
+    { label: 'PCIe Slot 1', value: '[Gen 5.0 x16]', editable: true },
+    { label: 'PCIe Slot 2', value: '[Gen 4.0 x4]', editable: true },
+    { label: 'PCIe Slot 3', value: '[Gen 3.0 x1]', editable: true },
+    { label: '', type: 'spacer' },
+    { label: 'NVMe Configuration', type: 'header' },
+    { label: 'M.2_1 Slot', value: '[Samsung 980 PRO 1TB - PCIe 4.0]' },
+    { label: 'M.2_2 Slot', value: '[Not Detected]' },
+    { label: '', type: 'spacer' },
+    { label: 'USB Configuration', type: 'header' },
+    { label: 'XHCI Hand-off', value: '[Enabled]', editable: true },
+    { label: 'USB4 Support', value: '[Enabled]', editable: true },
+    { label: 'Legacy USB Support', value: '[Disabled]', editable: true },
+  ];
+
+  const bootContent: BIOSItem[] = [
+    { label: 'Boot Configuration', type: 'header' },
+    { label: 'Boot Mode Selection', value: '[UEFI]', editable: true },
+    { label: 'Fast Boot', value: '[Enabled]', editable: true },
+    { label: 'Secure Boot Compatible', value: '[Yes]', editable: false },
+    { label: '', type: 'spacer' },
+    { label: 'Boot Option Priorities', type: 'header' },
+    { label: 'Boot Option #1', value: '[Windows Boot Manager]', editable: true },
+    { label: 'Boot Option #2', value: '[NVMe: Samsung 980 PRO]', editable: true },
+    { label: 'Boot Option #3', value: '[USB: Windows 11 Installation]', editable: true },
+    { label: 'Boot Option #4', value: '[Network: IPv4]', editable: true },
+    { label: 'Boot Option #5', value: '[Network: IPv6]', editable: true },
+    { label: '', type: 'spacer' },
+    { label: 'CSM (Compatibility Support Module)', type: 'header' },
+    { label: 'CSM Support', value: '[Disabled]', editable: true },
+    { label: 'Boot Device Control', value: '[UEFI only]', editable: true },
+  ];
+
+  const securityContent: BIOSItem[] = [
+    { label: 'Trusted Computing', type: 'header' },
+    { label: 'TPM Device Selection', value: '[Firmware TPM (fTPM)]', editable: true },
+    { label: 'TPM State', value: '[Enabled]', editable: true },
+    { label: 'TPM Version', value: '[2.0]', editable: false },
+    { label: 'SHA-1 PCR Bank', value: '[Enabled]', editable: true },
+    { label: 'SHA-256 PCR Bank', value: '[Enabled]', editable: true },
+    { label: '', type: 'spacer' },
+    { label: 'Secure Boot Configuration', type: 'header' },
+    { label: 'Secure Boot Enable', value: '[Enabled]', editable: true },
+    { label: 'Secure Boot Mode', value: '[Standard]', editable: true },
+    { label: 'Secure Boot Requirement', value: '[Windows 11 Compatible]', editable: false },
+    { label: '', type: 'spacer' },
+    { label: 'Key Management', type: 'header' },
+    { label: 'Platform Key (PK)', value: '[Installed]' },
+    { label: 'Key Exchange Key (KEK)', value: '[Installed]' },
+    { label: 'Signature Database (db)', value: '[Installed]' },
+    { label: 'Forbidden Signatures (dbx)', value: '[Installed]' },
+    { label: '', type: 'spacer' },
+    { label: 'Password Description', type: 'header' },
+    { label: 'Administrator Password', value: 'Not Installed' },
+    { label: 'User Password', value: 'Not Installed' },
+  ];
+
+  const powerContent: BIOSItem[] = [
+    { label: 'ACPI Settings', type: 'header' },
+    { label: 'ACPI Sleep State', value: '[S3 (Suspend to RAM)]', editable: true },
+    { label: 'Modern Standby Support', value: '[Enabled]', editable: true },
+    { label: 'ErP Ready', value: '[Disabled]', editable: true },
+    { label: '', type: 'spacer' },
+    { label: 'Wake Up Function', type: 'header' },
+    { label: 'Wake on LAN', value: '[Disabled]', editable: true },
+    { label: 'Resume By PCI-E Device', value: '[Disabled]', editable: true },
+    { label: 'RTC Alarm', value: '[Disabled]', editable: true },
+    { label: 'USB Wake Support', value: '[Enabled]', editable: true },
+    { label: '', type: 'spacer' },
+    { label: 'Hardware Monitor', type: 'header' },
+    { label: 'CPU Temperature', value: '42°C / 108°F' },
+    { label: 'System Temperature', value: '34°C / 93°F' },
+    { label: 'CPU Fan Speed', value: '1520 RPM' },
+    { label: 'System Fan Speed', value: '980 RPM' },
+    { label: 'CPU Vcore', value: '1.264 V' },
+    { label: '+3.3V', value: '3.312 V' },
+    { label: '+5V', value: '5.008 V' },
+    { label: '+12V', value: '12.096 V' },
+  ];
+
+  const exitContent: BIOSItem[] = [
+    { label: 'Exit Options', type: 'header' },
+    { label: 'Save Changes and Exit', value: '', action: 'save' },
+    { label: 'Discard Changes and Exit', value: '', action: 'discard' },
+    { label: 'Save Changes and Reset', value: '', action: 'save' },
+    { label: 'Discard Changes and Reset', value: '', action: 'discard' },
+    { label: '', type: 'spacer' },
+    { label: 'Default Options', type: 'header' },
+    { label: 'Restore Defaults', value: '', action: 'defaults' },
+    { label: 'Save as User Defaults', value: '' },
+    { label: 'Restore User Defaults', value: '' },
+  ];
+
+  const getContent = (): BIOSItem[] => {
+    switch (activeTab) {
+      case 0: return mainContent;
+      case 1: return advancedContent;
+      case 2: return bootContent;
+      case 3: return securityContent;
+      case 4: return powerContent;
+      case 5: return exitContent;
+      default: return [];
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    const content = getContent();
+    const selectableRows = content.filter(item => item.type !== 'spacer' && item.type !== 'header');
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedRow(prev => Math.min(prev + 1, selectableRows.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedRow(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'F10') {
+      e.preventDefault();
+      setShowSaveConfirm('save');
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      onBack();
+    }
+  };
+
+  const handleExitAction = (action: 'save' | 'discard' | 'defaults') => {
+    setShowSaveConfirm(null);
+    onExit();
+  };
+
+  const content = getContent();
+
+  return (
+    <div 
+      className="w-full h-full bg-gradient-to-br from-[#0f1729] via-[#1a2744] to-[#0a1628] text-white font-mono text-sm flex flex-col"
+      onKeyDown={handleKeyDown}
+      tabIndex={0}
+    >
+      {/* Header */}
+      <div className="text-center py-3 border-b border-blue-400/30 relative bg-[#0f1729]">
+        <button
+          onClick={onBack}
+          className="absolute left-4 top-2 px-3 py-1 bg-[#1a2744] hover:bg-[#2a3754] text-white text-xs border border-blue-400/50 rounded-lg shadow-lg"
+        >
+          ← Back to OS Selection
+        </button>
+        <div className="flex items-center justify-center gap-3">
+          <div className="w-14 h-14 bg-gradient-to-br from-blue-400 via-blue-500 to-purple-500 rounded-xl flex items-center justify-center shadow-2xl">
+            <div className="grid grid-cols-2 gap-[2px] w-7 h-7">
+              <div className="bg-white rounded-[2px]"></div>
+              <div className="bg-white rounded-[2px]"></div>
+              <div className="bg-white rounded-[2px]"></div>
+              <div className="bg-white rounded-[2px]"></div>
+            </div>
+          </div>
+          <div>
+            <div className="text-blue-300 font-bold text-xl">UEFI BIOS Setup Utility</div>
+            <div className="text-blue-200/70 text-xs">Version 5.21 - Windows 11 Ready - Copyright (C) 2021 American Megatrends</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main content area */}
+      <div className="flex-1 flex">
+        {/* Left side - tabs and content */}
+        <div className="flex-1 flex flex-col">
+          {/* Tab bar */}
+          <div className="flex border-b border-blue-400/30 bg-[#0f1729]">
+            {tabs.map((tab, i) => (
+              <button
+                key={tab}
+                onClick={() => { setActiveTab(i); setSelectedRow(0); }}
+                className={`px-5 py-2.5 text-sm transition-all ${
+                  activeTab === i 
+                    ? 'bg-gradient-to-r from-blue-500 to-purple-500 text-white font-bold shadow-lg' 
+                    : 'text-blue-200 hover:bg-[#1a2744]'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {/* Content area */}
+          <div className="flex-1 p-4 overflow-y-auto bg-[#0f1729]">
+            {content.map((item, index) => {
+              if (item.type === 'spacer') {
+                return <div key={index} className="h-2"></div>;
+              }
+              if (item.type === 'header') {
+                return (
+                  <div key={index} className="text-blue-300 font-bold mb-1 mt-2 border-b border-blue-400/30 pb-1">
+                    {item.label}
+                  </div>
+                );
+              }
+              if (item.action) {
+                return (
+                  <div 
+                    key={index}
+                    onClick={() => setShowSaveConfirm(item.action as any)}
+                    className="py-1.5 px-2 hover:bg-[#1a2744] cursor-pointer text-white rounded transition-colors"
+                  >
+                    {item.label}
+                  </div>
+                );
+              }
+              return (
+                <div key={index} className="flex justify-between py-1.5 px-2 hover:bg-[#1a2744] rounded transition-colors">
+                  <span className="text-blue-100">{item.label}</span>
+                  <span className={item.editable ? 'text-cyan-300' : 'text-blue-200/70'}>
+                    {item.value}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Right side - Help panel */}
+        <div className="w-72 bg-[#1a2744] border-l border-blue-400/30 p-4">
+          <div className="text-blue-300 font-bold mb-3">Item Help</div>
+          <div className="text-xs text-blue-100 leading-relaxed">
+            {activeTab === 0 && 'View system information including BIOS version, 12th Gen Intel processor, and DDR5 memory details.'}
+            {activeTab === 1 && 'Configure advanced CPU, PCIe 5.0, NVMe, and USB4 settings.'}
+            {activeTab === 2 && 'Set the boot priority order. Configure UEFI boot options for Windows 11.'}
+            {activeTab === 3 && 'Configure TPM 2.0, Secure Boot, and set passwords. Windows 11 requires TPM 2.0 and Secure Boot.'}
+            {activeTab === 4 && 'Configure ACPI settings, Modern Standby, and view hardware monitor readings.'}
+            {activeTab === 5 && 'Save or discard changes. Restore default settings.'}
+          </div>
+          {activeTab === 3 && (
+            <div className="mt-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+              <div className="text-green-300 text-xs font-bold mb-1">✓ Windows 11 Ready</div>
+              <div className="text-green-200/80 text-[10px]">TPM 2.0 and Secure Boot are properly configured for Windows 11 installation.</div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Footer - Function keys */}
+      <div className="border-t border-blue-400/30 bg-[#0f1729] px-4 py-2 flex justify-between text-xs">
+        <div className="flex gap-4">
+          <span><span className="text-cyan-300">↑↓</span>: Select Item</span>
+          <span><span className="text-cyan-300">+/-</span>: Change Value</span>
+          <span><span className="text-cyan-300">F1</span>: General Help</span>
+          <span><span className="text-cyan-300">F9</span>: Optimized Defaults</span>
+          <span><span className="text-cyan-300">F10</span>: Save & Exit</span>
+          <span><span className="text-cyan-300">ESC</span>: Back to OS Selection</span>
+        </div>
+      </div>
+
+      {/* Save/Exit Confirmation Dialog */}
+      {showSaveConfirm && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-50">
+          <div className="bg-gradient-to-br from-[#1a2744] to-[#0f1729] border-2 border-blue-400 p-6 w-96 rounded-xl shadow-2xl">
+            <div className="text-blue-300 font-bold mb-4 text-center">
+              {showSaveConfirm === 'save' && 'Save configuration and exit?'}
+              {showSaveConfirm === 'discard' && 'Discard changes and exit?'}
+              {showSaveConfirm === 'defaults' && 'Load optimized defaults?'}
+            </div>
+            <div className="flex justify-center gap-4">
+              <button
+                onClick={() => handleExitAction(showSaveConfirm)}
+                className="px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white font-bold hover:from-blue-600 hover:to-purple-600 rounded-lg shadow-lg"
+              >
+                [OK]
+              </button>
+              <button
+                onClick={() => setShowSaveConfirm(null)}
+                className="px-6 py-2 bg-[#2a3754] text-white font-bold hover:bg-[#3a4764] rounded-lg"
+              >
+                [Cancel]
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Win10BIOS({ onExit, onBack }: { onExit: () => void; onBack: () => void }) {
   const [activeTab, setActiveTab] = useState(0);
   const [selectedRow, setSelectedRow] = useState(0);
