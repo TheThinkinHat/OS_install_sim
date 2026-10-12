@@ -13,8 +13,8 @@ export default function App() {
 
   const handleSelectOS = (os: OSType) => {
     setSelectedOS(os);
-    // Start Windows 7 at BIOS, others at boot
-    setScreen(os === 'windows7' ? 'bios' : 'boot');
+    // Start Windows 7 and Ubuntu at BIOS, others at boot
+    setScreen((os === 'windows7' || os === 'ubuntu') ? 'bios' : 'boot');
     setOfficeInstalled(false);
     setOfficePhase('none');
   };
@@ -57,7 +57,8 @@ export default function App() {
   if (selectedOS === 'ubuntu') {
     return (
       <div className="w-full h-screen overflow-hidden bg-black">
-        {screen === 'boot' && <UbuntuInstall onComplete={(name) => { setUserName(name); setScreen('desktop'); }} onBack={handleBackToLanding} />}
+        {screen === 'bios' && <UbuntuBIOS onExit={() => setScreen('boot')} onBack={handleBackToLanding} />}
+        {screen === 'boot' && <UbuntuInstall onComplete={(name) => { setUserName(name); setScreen('desktop'); }} onBack={() => setScreen('bios')} />}
         {screen === 'desktop' && <UbuntuDesktop userName={userName} onShutdown={handleBackToLanding} />}
       </div>
     );
@@ -455,6 +456,313 @@ function Win7BIOS({ onExit, onBack }: { onExit: () => void; onBack: () => void }
               <button
                 onClick={() => setShowSaveConfirm(null)}
                 className="px-6 py-2 bg-[#aaaaaa] text-[#0000aa] font-bold hover:bg-white"
+              >
+                [Cancel]
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Ubuntu BIOS Setup Screen
+function UbuntuBIOS({ onExit, onBack }: { onExit: () => void; onBack: () => void }) {
+  const [activeTab, setActiveTab] = useState(0);
+  const [selectedRow, setSelectedRow] = useState(0);
+  const [showSaveConfirm, setShowSaveConfirm] = useState<'save' | 'discard' | 'defaults' | null>(null);
+
+  const tabs = ['Main', 'Advanced', 'Boot', 'Security', 'Power', 'Exit'];
+
+  type BIOSItem = {
+    label: string;
+    value?: string;
+    type?: 'header' | 'spacer';
+    editable?: boolean;
+    action?: 'save' | 'discard' | 'defaults';
+  };
+
+  const mainContent: BIOSItem[] = [
+    { label: 'System Information', type: 'header' },
+    { label: 'BIOS Vendor', value: 'American Megatrends Inc.' },
+    { label: 'Core Version', value: '5.17' },
+    { label: 'Compliancy', value: 'UEFI 2.8; PI 1.6' },
+    { label: 'Project Version', value: 'X570 AORUS PRO v2.1' },
+    { label: 'Build Date and Time', value: '06/15/2023 14:32:18' },
+    { label: '', type: 'spacer' },
+    { label: 'Processor Information', type: 'header' },
+    { label: 'Name', value: 'AMD Ryzen 7 5800X 8-Core Processor' },
+    { label: 'Frequency', value: '3800 MHz' },
+    { label: 'Microcode Revision', value: '0x0A20102B' },
+    { label: '', type: 'spacer' },
+    { label: 'Memory Information', type: 'header' },
+    { label: 'Total Memory', value: '32768 MB (DDR4)' },
+    { label: 'Memory Speed', value: '3600 MHz' },
+    { label: 'Memory Channels', value: 'Dual Channel' },
+  ];
+
+  const advancedContent: BIOSItem[] = [
+    { label: 'CPU Configuration', type: 'header' },
+    { label: 'AMD Virtualization (SVM)', value: '[Enabled]', editable: true },
+    { label: 'Core Performance Boost', value: '[Auto]', editable: true },
+    { label: 'Active CPU Cores', value: '[All]', editable: true },
+    { label: 'SMT Control', value: '[Enabled]', editable: true },
+    { label: '', type: 'spacer' },
+    { label: 'NVMe Configuration', type: 'header' },
+    { label: 'NVMe Controller', value: '[Samsung 970 EVO Plus 1TB]' },
+    { label: 'NVMe Status', value: '[Healthy]' },
+    { label: '', type: 'spacer' },
+    { label: 'SATA Configuration', type: 'header' },
+    { label: 'SATA Mode', value: '[AHCI]', editable: true },
+    { label: 'SATA Port 0', value: '[Not Detected]' },
+    { label: 'SATA Port 1', value: '[Not Detected]' },
+    { label: '', type: 'spacer' },
+    { label: 'USB Configuration', type: 'header' },
+    { label: 'XHCI Hand-off', value: '[Enabled]', editable: true },
+    { label: 'Legacy USB Support', value: '[Enabled]', editable: true },
+  ];
+
+  const bootContent: BIOSItem[] = [
+    { label: 'Boot Configuration', type: 'header' },
+    { label: 'Boot Mode', value: '[UEFI]', editable: true },
+    { label: 'Fast Boot', value: '[Enabled]', editable: true },
+    { label: '', type: 'spacer' },
+    { label: 'Boot Priority Order', type: 'header' },
+    { label: 'Boot Option #1', value: '[ubuntu]', editable: true },
+    { label: 'Boot Option #2', value: '[NVMe: Samsung 970 EVO Plus]', editable: true },
+    { label: 'Boot Option #3', value: '[USB: Kingston DataTraveler]', editable: true },
+    { label: 'Boot Option #4', value: '[Network: IPv4]', editable: true },
+    { label: 'Boot Option #5', value: '[Network: IPv6]', editable: true },
+    { label: '', type: 'spacer' },
+    { label: 'CSM (Compatibility Support Module)', type: 'header' },
+    { label: 'CSM Support', value: '[Disabled]', editable: true },
+  ];
+
+  const securityContent: BIOSItem[] = [
+    { label: 'Secure Boot Configuration', type: 'header' },
+    { label: 'Secure Boot', value: '[Disabled]', editable: true },
+    { label: 'Secure Boot Mode', value: '[Standard]', editable: true },
+    { label: '', type: 'spacer' },
+    { label: 'Key Management', type: 'header' },
+    { label: 'Platform Key (PK)', value: '[Not Installed]' },
+    { label: 'Key Exchange Key (KEK)', value: '[Not Installed]' },
+    { label: 'Allowed Signature Database (db)', value: '[Not Installed]' },
+    { label: 'Forbidden Signature Database (dbx)', value: '[Not Installed]' },
+    { label: '', type: 'spacer' },
+    { label: 'Password Description', type: 'header' },
+    { label: 'Administrator Password', value: 'Not Installed' },
+    { label: 'User Password', value: 'Not Installed' },
+  ];
+
+  const powerContent: BIOSItem[] = [
+    { label: 'ACPI Settings', type: 'header' },
+    { label: 'ACPI Sleep State', value: '[S3 (Suspend to RAM)]', editable: true },
+    { label: 'ErP Ready', value: '[Disabled]', editable: true },
+    { label: '', type: 'spacer' },
+    { label: 'Wake Up Function', type: 'header' },
+    { label: 'Wake on LAN', value: '[Disabled]', editable: true },
+    { label: 'Resume By PCI-E Device', value: '[Disabled]', editable: true },
+    { label: 'RTC Alarm', value: '[Disabled]', editable: true },
+    { label: '', type: 'spacer' },
+    { label: 'Hardware Monitor', type: 'header' },
+    { label: 'CPU Temperature', value: '38°C / 100°F' },
+    { label: 'System Temperature', value: '32°C / 90°F' },
+    { label: 'CPU Fan Speed', value: '1450 RPM' },
+    { label: 'System Fan Speed', value: '920 RPM' },
+    { label: 'CPU Vcore', value: '1.344 V' },
+    { label: '+3.3V', value: '3.312 V' },
+    { label: '+5V', value: '5.040 V' },
+    { label: '+12V', value: '12.096 V' },
+  ];
+
+  const exitContent: BIOSItem[] = [
+    { label: 'Exit Options', type: 'header' },
+    { label: 'Save Changes and Exit', value: '', action: 'save' },
+    { label: 'Discard Changes and Exit', value: '', action: 'discard' },
+    { label: 'Save Changes and Reset', value: '', action: 'save' },
+    { label: 'Discard Changes and Reset', value: '', action: 'discard' },
+    { label: '', type: 'spacer' },
+    { label: 'Default Options', type: 'header' },
+    { label: 'Restore Defaults', value: '', action: 'defaults' },
+    { label: 'Save as User Defaults', value: '' },
+    { label: 'Restore User Defaults', value: '' },
+  ];
+
+  const getContent = (): BIOSItem[] => {
+    switch (activeTab) {
+      case 0: return mainContent;
+      case 1: return advancedContent;
+      case 2: return bootContent;
+      case 3: return securityContent;
+      case 4: return powerContent;
+      case 5: return exitContent;
+      default: return [];
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    const content = getContent();
+    const selectableRows = content.filter(item => item.type !== 'spacer' && item.type !== 'header');
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedRow(prev => Math.min(prev + 1, selectableRows.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedRow(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'F10') {
+      e.preventDefault();
+      setShowSaveConfirm('save');
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      onBack();
+    }
+  };
+
+  const handleExitAction = (action: 'save' | 'discard' | 'defaults') => {
+    setShowSaveConfirm(null);
+    onExit();
+  };
+
+  const content = getContent();
+
+  return (
+    <div 
+      className="w-full h-full bg-gradient-to-br from-[#1a1a1a] to-[#2d2d2d] text-white font-mono text-sm flex flex-col"
+      onKeyDown={handleKeyDown}
+      tabIndex={0}
+    >
+      {/* Header */}
+      <div className="text-center py-3 border-b border-gray-600 relative bg-[#1a1a1a]">
+        <button
+          onClick={onBack}
+          className="absolute left-4 top-2 px-3 py-1 bg-[#3d3d3d] hover:bg-[#4d4d4d] text-white text-xs border border-gray-500 rounded"
+        >
+          ← Back to OS Selection
+        </button>
+        <div className="flex items-center justify-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-[#e95420] to-[#77216f] rounded-full flex items-center justify-center">
+            <svg viewBox="0 0 100 100" className="w-6 h-6">
+              <circle cx="50" cy="50" r="45" fill="white"/>
+              <circle cx="50" cy="50" r="15" fill="#e95420"/>
+              <circle cx="50" cy="15" r="8" fill="#e95420"/>
+              <circle cx="50" cy="85" r="8" fill="#e95420"/>
+              <circle cx="20" cy="32" r="8" fill="#e95420"/>
+              <circle cx="80" cy="32" r="8" fill="#e95420"/>
+              <circle cx="20" cy="68" r="8" fill="#e95420"/>
+              <circle cx="80" cy="68" r="8" fill="#e95420"/>
+            </svg>
+          </div>
+          <div>
+            <div className="text-[#e95420] font-bold text-lg">UEFI BIOS Setup Utility</div>
+            <div className="text-gray-400 text-xs">Version 5.17 - Copyright (C) 2023 American Megatrends Inc.</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main content area */}
+      <div className="flex-1 flex">
+        {/* Left side - tabs and content */}
+        <div className="flex-1 flex flex-col">
+          {/* Tab bar */}
+          <div className="flex border-b border-gray-600 bg-[#1a1a1a]">
+            {tabs.map((tab, i) => (
+              <button
+                key={tab}
+                onClick={() => { setActiveTab(i); setSelectedRow(0); }}
+                className={`px-4 py-2 text-sm transition-colors ${
+                  activeTab === i 
+                    ? 'bg-gradient-to-r from-[#e95420] to-[#77216f] text-white font-bold' 
+                    : 'text-gray-300 hover:bg-[#2d2d2d]'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {/* Content area */}
+          <div className="flex-1 p-4 overflow-y-auto bg-[#1a1a1a]">
+            {content.map((item, index) => {
+              if (item.type === 'spacer') {
+                return <div key={index} className="h-2"></div>;
+              }
+              if (item.type === 'header') {
+                return (
+                  <div key={index} className="text-[#e95420] font-bold mb-1 mt-2 border-b border-gray-700 pb-1">
+                    {item.label}
+                  </div>
+                );
+              }
+              if (item.action) {
+                return (
+                  <div 
+                    key={index}
+                    onClick={() => setShowSaveConfirm(item.action as any)}
+                    className="py-1 px-2 hover:bg-[#2d2d2d] cursor-pointer text-white rounded"
+                  >
+                    {item.label}
+                  </div>
+                );
+              }
+              return (
+                <div key={index} className="flex justify-between py-1 px-2 hover:bg-[#2d2d2d] rounded">
+                  <span className="text-gray-200">{item.label}</span>
+                  <span className={item.editable ? 'text-[#e95420]' : 'text-gray-400'}>
+                    {item.value}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Right side - Help panel */}
+        <div className="w-64 bg-[#2d2d2d] border-l border-gray-600 p-3">
+          <div className="text-[#e95420] font-bold mb-2">Item Help</div>
+          <div className="text-xs text-gray-300 leading-relaxed">
+            {activeTab === 0 && 'View system information including BIOS version, processor, and memory details.'}
+            {activeTab === 1 && 'Configure advanced CPU, NVMe, SATA, and USB settings.'}
+            {activeTab === 2 && 'Set the boot priority order. Configure UEFI boot options.'}
+            {activeTab === 3 && 'Configure Secure Boot settings and set passwords.'}
+            {activeTab === 4 && 'Configure ACPI settings and view hardware monitor readings.'}
+            {activeTab === 5 && 'Save or discard changes. Restore default settings.'}
+          </div>
+        </div>
+      </div>
+
+      {/* Footer - Function keys */}
+      <div className="border-t border-gray-600 bg-[#1a1a1a] px-4 py-2 flex justify-between text-xs">
+        <div className="flex gap-4">
+          <span><span className="text-[#e95420]">↑↓</span>: Select Item</span>
+          <span><span className="text-[#e95420]">+/-</span>: Change Value</span>
+          <span><span className="text-[#e95420]">F1</span>: General Help</span>
+          <span><span className="text-[#e95420]">F9</span>: Optimized Defaults</span>
+          <span><span className="text-[#e95420]">F10</span>: Save & Exit</span>
+          <span><span className="text-[#e95420]">ESC</span>: Back to OS Selection</span>
+        </div>
+      </div>
+
+      {/* Save/Exit Confirmation Dialog */}
+      {showSaveConfirm && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/70 z-50">
+          <div className="bg-[#2d2d2d] border-2 border-[#e95420] p-6 w-96 rounded-lg">
+            <div className="text-[#e95420] font-bold mb-4 text-center">
+              {showSaveConfirm === 'save' && 'Save configuration and exit?'}
+              {showSaveConfirm === 'discard' && 'Discard changes and exit?'}
+              {showSaveConfirm === 'defaults' && 'Load optimized defaults?'}
+            </div>
+            <div className="flex justify-center gap-4">
+              <button
+                onClick={() => handleExitAction(showSaveConfirm)}
+                className="px-6 py-2 bg-gradient-to-r from-[#e95420] to-[#77216f] text-white font-bold hover:opacity-90 rounded"
+              >
+                [OK]
+              </button>
+              <button
+                onClick={() => setShowSaveConfirm(null)}
+                className="px-6 py-2 bg-[#3d3d3d] text-white font-bold hover:bg-[#4d4d4d] rounded"
               >
                 [Cancel]
               </button>
