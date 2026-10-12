@@ -33,7 +33,7 @@ export default function App() {
   if (selectedOS === 'windows7') {
     return (
       <div className="w-full h-screen overflow-hidden bg-black">
-        {screen === 'bios' && <Win7BIOS onExit={() => setScreen('boot')} />}
+        {screen === 'bios' && <Win7BIOS onExit={() => setScreen('boot')} onBack={handleBackToLanding} />}
         {screen === 'boot' && <BootScreen onComplete={() => setScreen('language')} onBack={() => setScreen('bios')} />}
         {screen === 'language' && <LanguageScreen onNext={() => setScreen('install')} onBack={() => setScreen('boot')} />}
         {screen === 'install' && <Win7Install onComplete={() => setScreen('oobe')} onBack={() => setScreen('language')} />}
@@ -191,7 +191,7 @@ function LandingPage({ onSelectOS }: { onSelectOS: (os: OSType) => void }) {
 }
 
 // Windows 7 BIOS Setup Screen
-function Win7BIOS({ onExit }: { onExit: () => void }) {
+function Win7BIOS({ onExit, onBack }: { onExit: () => void; onBack: () => void }) {
   const [activeTab, setActiveTab] = useState(0);
   const [selectedRow, setSelectedRow] = useState(0);
   const [showSaveConfirm, setShowSaveConfirm] = useState<'save' | 'discard' | 'defaults' | null>(null);
@@ -322,7 +322,7 @@ function Win7BIOS({ onExit }: { onExit: () => void }) {
       setShowSaveConfirm('save');
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      setShowSaveConfirm('discard');
+      onBack();
     }
   };
 
@@ -340,7 +340,13 @@ function Win7BIOS({ onExit }: { onExit: () => void }) {
       tabIndex={0}
     >
       {/* Header */}
-      <div className="text-center py-2 border-b border-gray-400">
+      <div className="text-center py-2 border-b border-gray-400 relative">
+        <button
+          onClick={onBack}
+          className="absolute left-4 top-2 px-3 py-1 bg-[#000088] hover:bg-[#000066] text-white text-xs border border-gray-400"
+        >
+          ← Back to OS Selection
+        </button>
         <div className="text-yellow-300 font-bold">American Megatrends Inc.</div>
         <div className="text-white text-xs">UEFI BIOS Version 4.6.5</div>
         <div className="text-white text-xs">Copyright (C) 2012 American Megatrends Inc.</div>
@@ -426,6 +432,7 @@ function Win7BIOS({ onExit }: { onExit: () => void }) {
           <span><span className="text-yellow-300">F7</span>: EZ Mode</span>
           <span><span className="text-yellow-300">F9</span>: Optimized Defaults</span>
           <span><span className="text-yellow-300">F10</span>: Save & Exit</span>
+          <span><span className="text-yellow-300">ESC</span>: Back to OS Selection</span>
         </div>
       </div>
 
