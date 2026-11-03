@@ -19,7 +19,7 @@ import { SettingsWindow } from './drivers/SettingsApp';
 import { ExplorerWindow } from './drivers/Explorer';
 import { CmdWindow } from './drivers/CmdPrompt';
 import { ManufacturerInstallerWindow } from './drivers/ManufacturerInstaller';
-import { ComputerPropertiesWindow, ControlPanelWindow, ActionCenterWindow } from './drivers/SystemApplets';
+import { ComputerPropertiesWindow, ControlPanelWindow, ActionCenterWindow, SystemPropertiesWindow } from './drivers/SystemApplets';
 import { UacPrompt } from './drivers/InfInstall';
 
 interface WinWin { id: string; kind: 'dm' | 'settings' | 'explorer' | 'cmd' | 'sysprops' | 'computer' | 'controlpanel' | 'actioncenter'; top?: number; left?: number; installer?: ManufacturerInstaller; startPath?: string; initialPage?: 'update' | 'about' }
@@ -177,7 +177,6 @@ function Win10DriversDesktopInner(props: any) {
 
 // SystemPropertiesWindow expects an onDeviceManager callback — bridge provided inline above.
 function SysPropsBridge(p: { onClose: () => void; onDeviceManager: () => void; top?: number; left?: number; z?: number }) {
-  const { SystemPropertiesWindow } = require('./drivers/SystemApplets');
   return <SystemPropertiesWindow {...p} />;
 }
 

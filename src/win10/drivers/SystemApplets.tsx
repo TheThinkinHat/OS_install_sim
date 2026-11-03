@@ -1,4 +1,4 @@
-// ── Windows 7 System applets for the driver-management experience ────────────
+// ── Windows System applets for the driver-management experience ──────────────
 // Computer Properties, Control Panel (classic view), System and Security / System.
 
 import { useState } from 'react';
@@ -18,7 +18,7 @@ export function ComputerPropertiesWindow({ onClose, top = 40, left = 130, z = 62
         <div className="flex-1 border border-[#7f9db9] rounded-[2px] bg-white px-2 py-[3px] text-[12px] ml-1">Control Panel ▸ System and Security ▸ System</div>
       </div>
       <div className="flex-1 overflow-y-auto p-6" style={{ ...SEGOE, background: '#fff' }}>
-        <div className="text-[22px] text-[#003399] mb-1" style={{ fontWeight: 300 }}>Windows 7 Professional</div>
+        <div className="text-[22px] text-[#003399] mb-1" style={{ fontWeight: 300 }}>{OS_NAME}</div>
         <div className="text-[12px] text-gray-600 mb-5">{OS_BUILD} · Fully simulated environment — no host hardware is accessed.</div>
 
         <div className="space-y-1 text-[12px] max-w-[520px]">
@@ -27,7 +27,7 @@ export function ComputerPropertiesWindow({ onClose, top = 40, left = 130, z = 62
           <Row k="Model:" v="VirtualBox-compatible VM (simulated)" />
           <Row k="Processor:" v="Intel(R) Core(TM) i5-2400 CPU @ 3.10GHz   3.10 GHz" />
           <Row k="Installed memory (RAM):" v="4.00 GB" />
-          <Row k="System type:" v="64-bit Operating System" />
+          <Row k="System type:" v={`64-bit Operating System, ${SYSTEM_ARCH}-based processor`} />
           <Row k="Pen and Touch:" v="Touch Available: Automatically detected with screen resolution of 1280 x 720" />
           <Row k="" />
           <Row k="Computer name:" v="USER-PC" />
@@ -205,7 +205,7 @@ export function ControlPanelWindow({ os, onClose, onNavigate, top = 40, left = 1
           <div className="text-[17px] text-[#003399] mb-3" style={{ fontWeight: 300 }}>
             {path.length ? 'System and Security' : 'Control Panel (Classic View)'}
           </div>
-          {!path.length && os === 'windows7' && (
+          {!path.length && (
             <div className="mb-4 rounded-[3px] border border-[#cfd8e6] bg-[#fbfdff] px-3 py-2 text-[12px] flex items-center gap-2">
               <span>ℹ️</span>
               <span>Driver store contains {DRIVER_PACKAGES.length} packages · {warnCount > 0 ? `${warnCount} devices need driver software` : 'all devices have driver software'}.</span>

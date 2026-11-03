@@ -1,4 +1,4 @@
-// ── Windows 7 "Update Driver Software" wizard + installation pipeline ────────
+// ── "Update Driver Software" wizard + installation pipeline ──────────────────
 // Shared by Device Manager and Device Properties. All installation logic lives
 // in the driver service (applyPackage) — this file only orchestrates UI.
 

@@ -1,4 +1,4 @@
-// ── Windows 7 Device Properties dialog (General / Driver / Details / Resources)
+// ── Device Properties dialog (General / Driver / Details / Events / Resources)
 
 import { useMemo, useState } from 'react';
 import type { VDevice } from './types';
@@ -76,12 +76,12 @@ export function DevicePropertiesDialog({ deviceId, onClose, actions }: { deviceI
       {wizardOpen && <UpdateDriverWizard deviceId={dev.id} onClose={() => setWizardOpen(false)} />}
 
       {confirming === 'disable' && (
-        <TaskDialog title='Windows 7 Simulator' icon="⚠️" width={470} onClose={() => setConfirming(null)}
+        <TaskDialog title='Microsoft Simulator' icon="⚠️" width={470} onClose={() => setConfirming(null)}
           text={`Are you sure you want to disable this device?\n\n${dev.name}`}
           buttons={<div className="flex gap-2"><WinButton wide primary onClick={() => { setConfirming(null); setPendingDisable(true); }}>Yes</WinButton><WinButton wide onClick={() => setConfirming(null)}>No</WinButton></div>} />
       )}
       {confirming === 'uninstall' && (
-        <TaskDialog title='Windows 7 Simulator' icon="⚠️" width={520} onClose={() => setConfirming(null)}
+        <TaskDialog title='Microsoft Simulator' icon="⚠️" width={520} onClose={() => setConfirming(null)}
           text={`Are you sure you want to uninstall this device?\n\n${dev.name}`}
           footer={<label className="flex items-center gap-2 text-[12px]"><input type="checkbox" checked={deleteDrvChecked} onChange={(e) => setDeleteDrvChecked(e.target.checked)} /> Delete the driver software for this device.</label>}
           buttons={<div className="flex gap-2"><WinButton wide primary onClick={() => { setConfirming(null); setPendingDisable(null); uninstallDevice(dev.id, deleteDrvChecked); onClose(); }}>OK</WinButton><WinButton wide onClick={() => setConfirming(null)}>Cancel</WinButton></div>} />

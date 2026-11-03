@@ -1,4 +1,4 @@
-// ── Windows 7 folder browser dialog (SHBrowseForFolder-style) ────────────────
+// ── Folder browser dialog (SHBrowseForFolder-style) ──────────────────────────
 
 import { useMemo, useState } from 'react';
 import { DRIVER_FILESYSTEM } from './data';
