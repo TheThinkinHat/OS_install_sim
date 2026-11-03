@@ -141,11 +141,32 @@ export function Win10Install({ onComplete, onBack }) {
 }
 
 // Windows 10 Desktop
-// Windows 10 Desktop
-export function Win10Desktop({ userName, onShutdown, officeInstalled, officeVersion, onInstallOffice }) {
+// Optional entry points injected by the driver-management shell (src/win10/Win10Drivers.tsx).
+// When absent (e.g. other hosts), the desktop behaves exactly as before.
+export interface Win10DriverEntries {
+  openDeviceManager?: () => void;
+  openSettings?: (page?: 'update' | 'about') => void;
+  openExplorer?: (startPath?: string) => void;
+  openCmd?: () => void;
+  openControlPanel?: () => void;
+  openSystemProperties?: () => void;
+  openComputerProperties?: () => void;
+  openActionCenter?: () => void;
+  restartPending?: boolean;
+  onRestart?: () => void;
+  windowCount?: number;
+}
+
+export function Win10Desktop({ userName, onShutdown, officeInstalled, officeVersion, onInstallOffice, driverEntries }: {
+  userName: string; onShutdown: () => void; officeInstalled: boolean; officeVersion: string;
+  onInstallOffice: () => void; driverEntries?: Win10DriverEntries;
+}) {
+  const de = driverEntries ?? {};
+  const hasDrivers = !!driverEntries;
   const [showStartMenu, setShowStartMenu] = useState(false);
   const [showFileManager, setShowFileManager] = useState(false);
   const [showShutdownDialog, setShowShutdownDialog] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const [showWelcome, setShowWelcome] = useState(true);
   const [openApps, setOpenApps] = useState<OfficeAppName[]>([]);
   const [activeApp, setActiveApp] = useState<OfficeAppName | null>(null);
@@ -156,13 +177,29 @@ export function Win10Desktop({ userName, onShutdown, officeInstalled, officeVers
     setShowStartMenu(false);
   };
 
+  // Start-menu search: typing "device manager", "cmd", etc. launches the app (§3 authentic navigation)
+  const launchFromSearch = (q: string) => {
+    const t = q.toLowerCase();
+    if (hasDrivers) {
+      if (t.includes('device manager')) { de.openDeviceManager?.(); setShowStartMenu(false); return; }
+      if (t.includes('control panel')) { de.openControlPanel?.(); setShowStartMenu(false); return; }
+      if (t.includes('command prompt') || t.trim() === 'cmd') { de.openCmd?.(); setShowStartMenu(false); return; }
+      if (t.includes('explorer')) { de.openExplorer?.('C:\\'); setShowStartMenu(false); return; }
+      if (t.includes('action center')) { de.openActionCenter?.(); setShowStartMenu(false); return; }
+      if (t.includes('system properties')) { de.openSystemProperties?.(); setShowStartMenu(false); return; }
+    }
+    if (t.includes('settings') || t.includes('windows update')) {
+      if (hasDrivers) { de.openSettings?.('update'); setShowStartMenu(false); }
+    }
+  };
+
   return (
     <div className="w-full h-full relative overflow-hidden select-none">
       <div className="absolute inset-0" style={{ background: 'linear-gradient(135deg, #0078d7 0%, #005a9e 30%, #003d6b 70%, #001f3f 100%)' }}></div>
 
       <div className="absolute top-4 left-4 grid grid-cols-1 gap-2 z-10">
         <div className="flex flex-col items-center p-2 rounded hover:bg-white/10 cursor-pointer w-20"><span className="text-3xl mb-1">🗑️</span><span className="text-white text-[11px]">Recycle Bin</span></div>
-        <div className="flex flex-col items-center p-2 rounded hover:bg-white/10 cursor-pointer w-20"><span className="text-3xl mb-1">💻</span><span className="text-white text-[11px]">This PC</span></div>
+        <div onClick={() => { if (hasDrivers) de.openExplorer?.('C:\\'); else setShowFileManager(true); }} onContextMenu={(e) => { if (hasDrivers) { e.preventDefault(); de.openComputerProperties?.(); } }} className="flex flex-col items-center p-2 rounded hover:bg-white/10 cursor-pointer w-20"><span className="text-3xl mb-1">💻</span><span className="text-white text-[11px]">This PC</span></div>
         <div onClick={() => setShowFileManager(true)} className="flex flex-col items-center p-2 rounded hover:bg-white/10 cursor-pointer w-20"><span className="text-3xl mb-1">📁</span><span className="text-white text-[11px]">File Manager</span></div>
         {officeInstalled && (
           <>
@@ -196,14 +233,28 @@ export function Win10Desktop({ userName, onShutdown, officeInstalled, officeVers
           <div className="w-12 bg-gray-950 flex flex-col justify-between py-2">
             <div className="w-12 h-12 flex items-center justify-center hover:bg-white/10 cursor-pointer"><span className="text-white text-lg">☰</span></div>
             <div>
-              <div className="w-12 h-12 flex items-center justify-center hover:bg-white/10 cursor-pointer"><span className="text-white text-lg">⚙️</span></div>
+            <div className="w-12 h-12 flex items-center justify-center hover:bg-white/10 cursor-pointer" title="Windows System" onClick={() => { if (hasDrivers) { setShowStartMenu(false); de.openControlPanel?.(); } }}><span className="text-white text-lg">⚙️</span></div>
               <div className="w-12 h-12 flex items-center justify-center hover:bg-white/10 cursor-pointer" onClick={() => { setShowStartMenu(false); setShowShutdownDialog(true); }}><span className="text-white text-lg">⏻</span></div>
             </div>
           </div>
           <div className="flex-1 p-3">
             <div className="text-gray-400 text-xs mb-2 px-2">All apps</div>
-            <div className="space-y-0.5">
-              {['Calculator', 'Calendar', 'Edge', 'File Explorer', 'Mail', 'Settings', 'Store', 'Xbox'].map(app => <div key={app} className="px-2 py-1 text-white text-xs hover:bg-white/10 cursor-pointer rounded">{app}</div>)}
+            <div className="space-y-0.5 max-h-[210px] overflow-y-auto pr-1">
+              {(hasDrivers
+                ? ['Calculator', 'Calendar', 'Command Prompt', 'Control Panel', 'Device Manager', 'Edge', 'File Explorer', 'Mail', 'Settings', 'Store', 'Windows Update', 'Xbox']
+                : ['Calculator', 'Calendar', 'Edge', 'File Explorer', 'Mail', 'Settings', 'Store', 'Xbox']
+              ).map(app => (
+                <div key={app} onClick={() => {
+                  if (!hasDrivers) return;
+                  setShowStartMenu(false);
+                  if (app === 'Device Manager') de.openDeviceManager?.();
+                  else if (app === 'Settings') de.openSettings?.('update');
+                  else if (app === 'Windows Update') de.openSettings?.('update');
+                  else if (app === 'Command Prompt') de.openCmd?.();
+                  else if (app === 'Control Panel') de.openControlPanel?.();
+                  else if (app === 'File Explorer') de.openExplorer?.('C:\\');
+                }} className={`px-2 py-1 text-white text-xs hover:bg-white/10 cursor-pointer rounded ${hasDrivers && ['Device Manager', 'Settings', 'Windows Update', 'Command Prompt', 'Control Panel', 'File Explorer'].includes(app) ? '' : hasDrivers ? 'text-gray-500' : ''}`}>{app}</div>
+              ))}
             </div>
             {officeInstalled && (
               <>
@@ -228,22 +279,47 @@ export function Win10Desktop({ userName, onShutdown, officeInstalled, officeVers
           <div className="bg-gray-800 border border-gray-700 shadow-2xl p-8 max-w-md">
             <div className="text-center mb-6">
               <div className="w-16 h-16 bg-blue-600 flex items-center justify-center mx-auto mb-4"><span className="text-white text-3xl">⏻</span></div>
-              <h2 className="text-white text-xl mb-2">Shut down your PC?</h2>
+              <h2 className="text-white text-xl mb-2">{de.restartPending ? 'Restart your PC' : 'Shut down your PC?'}</h2>
+              {de.restartPending && <p className="text-gray-300 text-xs mb-2">Windows needs to restart to finish installing updated driver software.</p>}
             </div>
             <div className="flex gap-3 justify-center">
               <button onClick={() => setShowShutdownDialog(false)} className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm">Cancel</button>
-              <button onClick={onShutdown} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm">Shut down</button>
+              {de.restartPending && de.onRestart && (
+                <button onClick={() => { setShowShutdownDialog(false); de.onRestart?.(); }} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm">Restart now</button>
+              )}
+              <button onClick={onShutdown} className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm">{de.restartPending ? 'Shut down anyway' : 'Shut down'}</button>
             </div>
           </div>
         </div>
       )}
 
       <div className="absolute bottom-0 left-0 right-0 h-10 bg-gray-900/95 backdrop-blur-sm flex items-center z-20 border-t border-gray-700">
-        <button onClick={() => setShowStartMenu(!showStartMenu)} className={`w-12 h-10 flex items-center justify-center hover:bg-white/10 ${showStartMenu ? 'bg-white/10' : ''}`}>
+        <button onClick={() => setShowStartMenu(!showStartMenu)} onContextMenu={(e) => { if (hasDrivers) { e.preventDefault(); setShowStartMenu(false); de.openDeviceManager?.(); } }} title={hasDrivers ? 'Right-click: Device Manager' : undefined} className={`w-12 h-10 flex items-center justify-center hover:bg-white/10 ${showStartMenu ? 'bg-white/10' : ''}`}>
           <div className="grid grid-cols-2 gap-[1px] w-4 h-4"><div className="bg-white"></div><div className="bg-white"></div><div className="bg-white"></div><div className="bg-white"></div></div>
         </button>
-        <div className="h-8 w-64 bg-white/5 border border-white/10 flex items-center px-3 mx-1"><span className="text-white/50 text-xs mr-2">🔍</span><span className="text-white/50 text-xs">Type here to search</span></div>
-        <div className="ml-auto flex items-center gap-1 px-2"><span className="text-white/70 text-xs px-1">📶</span><span className="text-white/70 text-xs px-1">🔊</span></div>
+        <div className="h-8 w-64 bg-white/5 border border-white/10 flex items-center px-3 mx-1">
+          <span className="text-white/50 text-xs mr-2">🔍</span>
+          <input
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { launchFromSearch(searchText); setSearchText(''); } }}
+            placeholder="Type here to search"
+            className="flex-1 bg-transparent outline-none text-white text-xs placeholder-white/50"
+          />
+        </div>
+        {(de.windowCount ?? 0) > 0 && (
+          <div className="flex items-center gap-1 px-2 ml-1">
+            <button onClick={() => { de.openDeviceManager?.(); }} className="h-8 min-w-[40px] px-2 bg-white/10 border-b-2 border-blue-400 flex items-center justify-center text-white text-xs" title="Driver management windows">🧩</button>
+          </div>
+        )}
+        {de.restartPending && (
+          <button onClick={() => { setShowStartMenu(false); setShowShutdownDialog(true); }} className="h-8 px-2 mx-1 bg-[#c42b1c]/90 hover:bg-[#c42b1c] text-white text-[11px] rounded-sm flex items-center gap-1" title="Restart required to finish driver installation">⟳ Restart required</button>
+        )}
+        <div className="ml-auto flex items-center gap-1 px-2 cursor-pointer hover:bg-white/10 h-10" onClick={() => { if (hasDrivers) de.openActionCenter?.(); }}>
+          <span className="text-white/70 text-xs px-1">📶</span>
+          <span className="text-white/70 text-xs px-1">🔊</span>
+          {hasDrivers && devicesNeedAttention(de) && <span className="text-yellow-400 text-xs px-1">⚠</span>}
+        </div>
         <div className="flex items-center gap-2 px-3 h-full hover:bg-white/10 cursor-pointer">
           <div className="text-right"><div className="text-white text-xs">{new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}</div><div className="text-white text-[10px]">{new Date().toLocaleDateString()}</div></div>
           <button onClick={() => { setShowStartMenu(false); setShowShutdownDialog(true); }} className="ml-2 w-6 h-6 flex items-center justify-center hover:bg-white/10 rounded"><span className="text-white/70 text-xs">⏻</span></button>
@@ -252,5 +328,8 @@ export function Win10Desktop({ userName, onShutdown, officeInstalled, officeVers
     </div>
   );
 }
+
+// Small helper — the shell passes no device data, so this stays conservative.
+function devicesNeedAttention(_de: Win10DriverEntries): boolean { return false; }
 
 // Windows 11 Install

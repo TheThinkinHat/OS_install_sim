@@ -19,7 +19,7 @@ import { SettingsWindow } from './drivers/SettingsApp';
 import { ExplorerWindow } from './drivers/Explorer';
 import { CmdWindow } from './drivers/CmdPrompt';
 import { ManufacturerInstallerWindow } from './drivers/ManufacturerInstaller';
-import { ComputerPropertiesWindow, ControlPanelWindow, ActionCenterWindow } from './drivers/SystemApplets';
+import { ComputerPropertiesWindow, ControlPanelWindow, ActionCenterWindow, SystemPropertiesWindow } from './drivers/SystemApplets';
 import { UacPrompt } from './drivers/InfInstall';
 
 interface WinWin { id: string; kind: 'dm' | 'settings' | 'explorer' | 'cmd' | 'sysprops' | 'computer' | 'controlpanel' | 'actioncenter'; top?: number; left?: number; installer?: ManufacturerInstaller; startPath?: string; initialPage?: 'update' | 'about' }
@@ -111,7 +111,7 @@ function Win10DriversDesktopInner(props: any) {
           case 'settings': return <SettingsWindow key={w.id} onClose={() => closeWin(w.id)} initialPage={w.initialPage ?? 'update'} top={w.top ?? cascade.top} left={w.left ?? cascade.left} z={zTop} />;
           case 'explorer': return <ExplorerWindow key={w.id} onClose={() => closeWin(w.id)} startPath={w.startPath ?? 'C:\\'} onLaunchInstaller={launchInstaller} top={w.top ?? cascade.top} left={w.left ?? cascade.left} z={zTop} />;
           case 'cmd': return <CmdWindow key={w.id} onClose={() => closeWin(w.id)} top={w.top ?? cascade.top + 20} left={w.left ?? cascade.left + 40} z={zTop} />;
-          case 'controlpanel': return <ControlPanelWindow key={w.id} os="windows10" onClose={() => closeWin(w.id)} onNavigate={(item) => { if (item.id === 'devmgr') openWin('dm'); if (item.id === 'sysprops') openWin('sysprops'); if (item.id === 'system') openWin('computer'); }} top={w.top ?? cascade.top} left={w.left ?? cascade.left} z={zTop} />;
+          case 'controlpanel': return <ControlPanelWindow key={w.id} os="windows10" onClose={() => closeWin(w.id)} onNavigate={(id) => { if (id === 'devmgr') openWin('dm'); if (id === 'sysprops') openWin('sysprops'); if (id === 'system') openWin('computer'); if (id === 'explorer-drivers') openWin('explorer', { startPath: 'C:\\Drivers\\Graphics' }); if (id === 'actioncenter') openWin('actioncenter'); }} top={w.top ?? cascade.top} left={w.left ?? cascade.left} z={zTop} />;
           case 'sysprops': return <SysPropsBridge key={w.id} onClose={() => closeWin(w.id)} onDeviceManager={() => openWin('dm')} top={w.top ?? cascade.top} left={w.left ?? cascade.left} z={zTop} />;
           case 'computer': return <ComputerPropertiesWindow key={w.id} onClose={() => closeWin(w.id)} top={w.top ?? cascade.top} left={w.left ?? cascade.left} z={zTop} />;
           case 'actioncenter': return <ActionCenterWindow key={w.id} onClose={() => closeWin(w.id)} onDeviceManager={() => openWin('dm')} top={w.top ?? 40} left={w.left ?? 320} z={zTop} />;
@@ -177,7 +177,6 @@ function Win10DriversDesktopInner(props: any) {
 
 // SystemPropertiesWindow expects an onDeviceManager callback — bridge provided inline above.
 function SysPropsBridge(p: { onClose: () => void; onDeviceManager: () => void; top?: number; left?: number; z?: number }) {
-  const { SystemPropertiesWindow } = require('./drivers/SystemApplets');
   return <SystemPropertiesWindow {...p} />;
 }
 

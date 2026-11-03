@@ -1,4 +1,4 @@
-// ── Windows 7 "Update Driver Software" wizard + installation pipeline ────────
+// ── "Update Driver Software" wizard + installation pipeline ──────────────────
 // Shared by Device Manager and Device Properties. All installation logic lives
 // in the driver service (applyPackage) — this file only orchestrates UI.
 
@@ -125,7 +125,7 @@ export function UpdateDriverWizard({ deviceId, onClose }: { deviceId: string; on
       if (idx >= INSTALL_STEPS.length) {
         // Perform the real state mutation through the centralized service
         const outcome = applyPackage(dev.id, pkg.id);
-        if (outcome.success) setStage({ s: 'success', pkg, reboot: outcome.requiresReboot });
+        if (outcome.success) setStage({ s: 'success', pkg, reboot: !!outcome.requiresReboot });
         else setStage({ s: 'failed', pkg, message: outcome.message ?? 'Installation failed.' });
         return;
       }

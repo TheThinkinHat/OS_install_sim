@@ -61,7 +61,7 @@ export function DeviceManagerWindow({ onClose, onMinimize, top, left, z }: { onC
   const selectedDevice = selected?.kind === 'dev' ? devices.find((d) => d.id === selected.id) : undefined;
 
   const doScan = () => {
-    const added = scanForChanges();
+    const added = scanForChanges().length;
     showToast(added > 0 ? `Device Manager found ${added} new device${added > 1 ? 's' : ''}.` : 'Device Manager has scanned for hardware changes. No new hardware was found.');
   };
 
@@ -168,7 +168,7 @@ export function DeviceManagerWindow({ onClose, onMinimize, top, left, z }: { onC
       {wizardId && <UpdateDriverWizard deviceId={wizardId} onClose={() => setWizardId(null)} />}
 
       {confirmUninstall && (
-        <TaskDialog title="Windows 7 Simulator" icon="⚠️"
+        <TaskDialog title="Microsoft Simulator" icon="⚠️"
           text={`Are you sure you want to uninstall this device?\n\n${confirmUninstall.name}`}
           footer={<label className="flex items-center gap-2 text-[12px]"><input type="checkbox" checked={deleteDrvChecked} onChange={(e) => setDeleteDrvChecked(e.target.checked)} className="accent-[#1d528c]" />Delete the driver software for this device.</label>}
           buttons={<><WinButton onClick={() => setConfirmUninstall(null)}>Cancel</WinButton><WinButton primary onClick={() => { uninstallDevice(confirmUninstall.id, deleteDrvChecked); showToast(`The driver for "${confirmUninstall.name}" was uninstalled.${deleteDrvChecked ? ' The driver software was deleted from the driver store.' : ' The device now requires driver software. (Code 28)'} `); setDeleteDrvChecked(false); setConfirmUninstall(null); setPropsId(null); }}>OK</WinButton></>}

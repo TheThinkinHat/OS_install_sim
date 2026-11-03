@@ -3,7 +3,8 @@ import type { OSType, OfficePhase } from './types';
 import { LandingPage, Win7BIOS, BootScreen, LanguageScreen, Win7Install, Win7OOBE, Win7Desktop } from './screens/windows7.tsx';
 import { Win7Desktop as Win7DriversDesktop } from './win7/Win7Drivers';
 import { UbuntuBIOS, UbuntuInstall, UbuntuDesktop } from './screens/ubuntu.tsx';
-import { Win10BIOS, Win10Install, Win10Desktop } from './screens/windows10.tsx';
+import { Win10BIOS, Win10Install } from './screens/windows10.tsx';
+import { Win10DriversDesktop } from './win10/Win10Drivers';
 import { Win11BIOS, Win11Install, Win11Desktop } from './screens/windows11.tsx';
 import { MacBootScreen, MacUtilitiesScreen, MacInstallScreens, MacSetupAssistant, MacDesktop } from './screens/macos.tsx';
 import { OfficeSetup, OfficeInstalling, OfficeComplete } from './shared/office.tsx';
@@ -76,7 +77,7 @@ export default function App() {
         {screen === 'bios' && <Win10BIOS onExit={() => setScreen('install')} onBack={handleBackToLanding} />}
         {screen === 'install' && <Win10Install onComplete={(name: string) => { setUserName(name); setScreen('desktop'); }} onBack={() => setScreen('bios')} />}
         {screen === 'desktop' && (
-          <Win10Desktop
+          <Win10DriversDesktop
             userName={userName}
             onShutdown={handleBackToLanding}
             officeInstalled={officeInstalled}
