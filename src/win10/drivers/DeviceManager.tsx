@@ -61,7 +61,7 @@ export function DeviceManagerWindow({ onClose, onMinimize, top, left, z }: { onC
   const selectedDevice = selected?.kind === 'dev' ? devices.find((d) => d.id === selected.id) : undefined;
 
   const doScan = () => {
-    const added = scanForChanges();
+    const added = scanForChanges().length;
     showToast(added > 0 ? `Device Manager found ${added} new device${added > 1 ? 's' : ''}.` : 'Device Manager has scanned for hardware changes. No new hardware was found.');
   };
 
