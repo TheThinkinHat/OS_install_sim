@@ -1,10 +1,12 @@
-// ── Windows 7 Explorer (simulated) — browse the driver filesystem & run setup .exe files
+// ── Simulated Explorer — browse the driver filesystem, run setup .exe files
+// and right-click → Install supported .inf packages (§13)
 
-import { useMemo, useState } from 'react';
-import type { ManufacturerInstaller } from './types';
-import { DRIVER_FILESYSTEM, MANUFACTURER_INSTALLERS, listFolder } from './data';
-import { AeroWindow, SEGOE } from './ui';
+import { useMemo, useRef, useState } from 'react';
+import type { DriverPackage, ManufacturerInstaller } from './types';
+import { DRIVER_FILESYSTEM, MANUFACTURER_INSTALLERS, listFolder, packageForInfFile } from './data';
+import { AeroWindow, ContextMenu, SEGOE } from './ui';
 import { useDrivers } from './service';
+import { InfInstallDialog } from './InfInstall';
 
 export function ExplorerWindow({ startPath = 'C:\\', onClose, onLaunchInstaller, top = 56, left = 200, z = 55 }: {
   startPath?: string;
@@ -16,6 +18,10 @@ export function ExplorerWindow({ startPath = 'C:\\', onClose, onLaunchInstaller,
   const [history, setHistory] = useState<string[]>([startPath]);
   const [histIdx, setHistIdx] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; pkg: DriverPackage; fileName: string } | null>(null);
+  const [infInstall, setInfInstall] = useState<{ pkg: DriverPackage; fileName: string } | null>(null);
+  const zRef = useRef(z);
+  void useDrivers; // (INF install dialog uses the provider internally)
 
   const nodes = useMemo(() => listFolder(path), [path]);
   const tree = ['C:\\', 'C:\\Drivers', 'C:\\Windows'];
@@ -41,6 +47,16 @@ export function ExplorerWindow({ startPath = 'C:\\', onClose, onLaunchInstaller,
       const inst = MANUFACTURER_INSTALLERS.find((i) => i.id === installerId);
       if (inst) onLaunchInstaller(inst);
     }
+  };
+
+  const onRowContext = (e: React.MouseEvent, name: string, kind: 'folder' | 'file') => {
+    if (kind !== 'file' || !name.toLowerCase().endsWith('.inf')) return;
+    const pkg = packageForInfFile(path, name);
+    if (!pkg) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setSelected(name);
+    setMenu({ x: e.clientX, y: e.clientY, pkg, fileName: name });
   };
 
   return (
@@ -88,12 +104,14 @@ export function ExplorerWindow({ startPath = 'C:\\', onClose, onLaunchInstaller,
             <tbody>
               {nodes.map((n) => {
                 const isExe = n.kind === 'file' && n.name.endsWith('.exe');
+                const isInf = n.kind === 'file' && n.name.toLowerCase().endsWith('.inf') && packageForInfFile(path, n.name);
                 return (
                   <tr key={n.name}
                     onClick={() => setSelected(n.name)}
                     onDoubleClick={() => openNode(n.name, n.kind, n.installerId)}
+                    onContextMenu={(e) => onRowContext(e, n.name, n.kind)}
                     className={`cursor-default ${selected === n.name ? 'bg-[#91c9f7]' : 'hover:bg-[#eaf3fb]'}`}>
-                    <td className="px-3 py-[4px] truncate">{n.icon ?? (n.kind === 'folder' ? '📁' : '📄')} {n.name}{isExe && <span className="ml-2 text-[10px] text-[#1d6b28] border border-[#9fd3a5] rounded-[2px] px-1 bg-[#f2fbf2]">Setup</span>}</td>
+                    <td className="px-3 py-[4px] truncate">{n.icon ?? (n.kind === 'folder' ? '📁' : '📄')} {n.name}{isExe && <span className="ml-2 text-[10px] text-[#1d6b28] border border-[#9fd3a5] rounded-[2px] px-1 bg-[#f2fbf2]">Setup</span>}{isInf && <span className="ml-2 text-[10px] text-[#555] border border-[#ccc] rounded-[2px] px-1 bg-[#f7f7f7]">Right-click → Install</span>}</td>
                     <td className="px-2 py-[4px] text-gray-600">{n.kind === 'folder' ? 'File folder' : exeType(n.name)}</td>
                     <td className="px-2 py-[4px] text-gray-500 truncate">{n.note ?? ''}</td>
                   </tr>
@@ -107,8 +125,29 @@ export function ExplorerWindow({ startPath = 'C:\\', onClose, onLaunchInstaller,
 
       {/* Status bar */}
       <div className="h-[22px] shrink-0 flex items-center px-3 text-[11px] text-[#444]" style={{ background: '#f0f0f0', borderTop: '1px solid #d9d9d9' }}>
-        {nodes.length} item{nodes.length === 1 ? '' : 's'}{selected ? ` · ${selected} selected — double-click to open` : ' · Double-click a Setup file to launch the manufacturer installer'}
+        {nodes.length} item{nodes.length === 1 ? '' : 's'}{selected ? ` · ${selected} selected — double-click to open, right-click .inf for Install` : ' · Double-click a Setup file to launch the manufacturer installer'}
       </div>
+
+      {menu && (
+        <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}
+          items={[
+            { label: 'Open', disabled: true },
+            { sep: true },
+            ...(menu.pkg.contextInstallable
+              ? [{ label: 'Install', onClick: () => { setInfInstall({ pkg: menu.pkg, fileName: menu.fileName }); setMenu(null); } }]
+              : [{ label: 'Install', disabled: true }]),
+            { sep: true },
+            { label: 'Copy', disabled: true },
+            { label: 'Delete', disabled: true },
+            { sep: true },
+            { label: 'Properties', disabled: true },
+          ]} />
+      )}
+
+      {infInstall && (
+        <InfInstallDialog pkg={infInstall.pkg} fileName={infInstall.fileName} folder={path} z={(zRef.current += 5)}
+          onClose={() => setInfInstall(null)} />
+      )}
     </AeroWindow>
   );
 }
