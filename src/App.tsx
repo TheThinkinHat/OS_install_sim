@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { OSType, OfficePhase } from './types';
 import { LandingPage, Win7BIOS, BootScreen, LanguageScreen, Win7Install, Win7OOBE, Win7Desktop } from './screens/windows7.tsx';
+import { Win7Desktop as Win7DriversDesktop } from './win7/Win7Drivers';
 import { UbuntuBIOS, UbuntuInstall, UbuntuDesktop } from './screens/ubuntu.tsx';
 import { Win10BIOS, Win10Install, Win10Desktop } from './screens/windows10.tsx';
 import { Win11BIOS, Win11Install, Win11Desktop } from './screens/windows11.tsx';
@@ -43,13 +44,13 @@ export default function App() {
         {screen === 'install' && <Win7Install onComplete={() => setScreen('oobe')} onBack={() => setScreen('language')} />}
         {screen === 'oobe' && <Win7OOBE onComplete={(name: string, comp: string) => { setUserName(name); setComputerName(comp); setScreen('desktop'); }} />}
         {screen === 'desktop' && (
-          <Win7Desktop
+          <Win7DriversDesktop
             userName={userName}
             computerName={computerName}
-            onRestart={handleBackToLanding}
             officeInstalled={officeInstalled}
             officeVersion={officeVersion}
             onInstallOffice={() => setOfficePhase('setup')}
+            os="windows7"
           />
         )}
         {officePhase === 'setup' && <OfficeSetup version={officeVersion} onNext={() => setOfficePhase('installing')} onCancel={() => setOfficePhase('none')} />}
