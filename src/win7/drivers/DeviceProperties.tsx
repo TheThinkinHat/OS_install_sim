@@ -7,30 +7,48 @@ import { statusTextFor, useDrivers } from './service';
 import { SEGOE, TaskDialog, WarnGlyph, WinButton } from './ui';
 import type { DMActions } from './DeviceManager';
 import { DriverDetailsDialog } from './DriverDetails';
+import { UpdateDriverWizard } from './UpdateDriverWizard';
 
 const TABS = ['General', 'Driver', 'Details', 'Resources'] as const;
 type Tab = typeof TABS[number];
 
 export function DevicePropertiesDialog({ deviceId, onClose, actions }: { deviceId: string; onClose: () => void; actions: DMActions }) {
-  const { devices, rollBack } = useDrivers();
+  const { devices, rollBack, uninstallDevice } = useDrivers();
   const dev = devices.find((d) => d.id === deviceId);
   const [tab, setTab] = useState<Tab>('General');
   const [drvMsg, setDrvMsg] = useState<string | null>(null);
   const [showDrvDetails, setShowDrvDetails] = useState(false);
+  // Local dialog state — does not mutate the shared driver database until confirmed
+  const [pendingDisable, setPendingDisable] = useState<boolean | null>(null);
+  const [confirming, setConfirming] = useState<'disable' | 'uninstall' | null>(null);
+  const [deleteDrvChecked, setDeleteDrvChecked] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   if (!dev) return null;
 
+  const effState = pendingDisable === true ? 'disabled' : pendingDisable === false ? (dev.driver ? 'ok' : 'no-driver') : dev.state;
   const deviceTypeLabel = `${(CATEGORY_DISPLAY[dev.category] ?? dev.category)}`;
-  const canDisable = dev.state !== 'disabled' && !!dev.driver;
-  const canEnable = dev.state === 'disabled';
-  const canRollback = dev.previousDrivers.length > 0;
+  const canDisable = effState !== 'disabled' && !!dev.driver;
+  const canEnable = effState === 'disabled';
+  const canRollback = dev.previousDrivers.length > 0 && pendingDisable === null;
   const canUninstall = true;
+
+  const applyPending = () => {
+    if (pendingDisable === true) actions.toggleDisable(dev.id, true);
+    else if (pendingDisable === false) actions.toggleDisable(dev.id, false);
+    setPendingDisable(null);
+  };
 
   return (
     <>
       <TaskDialog title={`${dev.name} Properties`} width={520} onClose={onClose}
-        buttons={<div className="flex w-full justify-end gap-2 items-center">
-          <WinButton onClick={onClose}>Close</WinButton>
+        buttons={<div className="flex w-full justify-between gap-2 items-center">
+          <span className="text-[11px] text-gray-500">{pendingDisable !== null ? 'Click OK to apply the pending change.' : ''}</span>
+          <div className="flex gap-2">
+            <WinButton onClick={() => { applyPending(); onClose(); }}>OK</WinButton>
+            <WinButton onClick={() => { setPendingDisable(null); onClose(); }}>Cancel</WinButton>
+            <WinButton onClick={onClose}>Apply</WinButton>
+          </div>
         </div>}>
         {/* Tab strip */}
         <div className="flex gap-px -mx-1 mb-0 border-b border-[#a4b8d4] px-1 pt-1" style={{ background: '#f0f0f0' }}>
@@ -41,20 +59,33 @@ export function DevicePropertiesDialog({ deviceId, onClose, actions }: { deviceI
         </div>
 
         <div className="bg-white border border-[#a4b8d4] border-t-0 rounded-b-[4px] p-4 min-h-[300px] max-h-[420px] overflow-y-auto" style={SEGOE}>
-          {tab === 'General' && <GeneralTab dev={dev} deviceTypeLabel={deviceTypeLabel} />}
-          {tab === 'Driver' && <DriverTab dev={dev} msg={drvMsg}
+          {tab === 'General' && <GeneralTab dev={{ ...dev, state: effState }} deviceTypeLabel={deviceTypeLabel} />}
+          {tab === 'Driver' && <DriverTab dev={{ ...dev, state: effState }} msg={drvMsg}
             onDetails={() => setShowDrvDetails(true)}
-            onUpdate={() => { onClose(); actions.updateDriver(dev.id); }}
-            onRollback={() => { const r = rollBack(dev.id); setDrvMsg(r.ok ? r.message : `Roll Back Driver: ${r.message}`); }}
-            onDisable={() => { actions.toggleDisable(dev.id); }}
-            onEnable={() => { actions.toggleDisable(dev.id); }}
-            onUninstall={() => { onClose(); actions.uninstall(dev.id); }}
+            onUpdate={() => { applyPending(); setWizardOpen(true); }}
+            onRollback={() => { const r = rollBack(dev.id); setPendingDisable(null); setDrvMsg(r.ok ? r.message : `Roll Back Driver: ${r.message}`); }}
+            onDisable={() => setConfirming('disable')}
+            onEnable={() => { setPendingDisable(false); setDrvMsg('When you click OK or Apply, this device will be enabled.'); }}
+            onUninstall={() => setConfirming('uninstall')}
             canRollback={canRollback} canDisable={canDisable} canEnable={canEnable} canUninstall={canUninstall} />}
           {tab === 'Details' && <DetailsTab dev={dev} />}
           {tab === 'Resources' && <ResourcesTab dev={dev} />}
         </div>
       </TaskDialog>
       {showDrvDetails && <DriverDetailsDialog dev={dev} onClose={() => setShowDrvDetails(false)} />}
+      {wizardOpen && <UpdateDriverWizard deviceId={dev.id} onClose={() => setWizardOpen(false)} />}
+
+      {confirming === 'disable' && (
+        <TaskDialog title='Windows 7 Simulator' icon="⚠️" width={470} onClose={() => setConfirming(null)}
+          text={`Are you sure you want to disable this device?\n\n${dev.name}`}
+          buttons={<div className="flex gap-2"><WinButton wide primary onClick={() => { setConfirming(null); setPendingDisable(true); }}>Yes</WinButton><WinButton wide onClick={() => setConfirming(null)}>No</WinButton></div>} />
+      )}
+      {confirming === 'uninstall' && (
+        <TaskDialog title='Windows 7 Simulator' icon="⚠️" width={520} onClose={() => setConfirming(null)}
+          text={`Are you sure you want to uninstall this device?\n\n${dev.name}`}
+          footer={<label className="flex items-center gap-2 text-[12px]"><input type="checkbox" checked={deleteDrvChecked} onChange={(e) => setDeleteDrvChecked(e.target.checked)} /> Delete the driver software for this device.</label>}
+          buttons={<div className="flex gap-2"><WinButton wide primary onClick={() => { setConfirming(null); setPendingDisable(null); uninstallDevice(dev.id, deleteDrvChecked); onClose(); }}>OK</WinButton><WinButton wide onClick={() => setConfirming(null)}>Cancel</WinButton></div>} />
+      )}
     </>
   );
 }
@@ -111,7 +142,7 @@ function GeneralTab({ dev, deviceTypeLabel }: { dev: VDevice; deviceTypeLabel: s
   );
 }
 
-function DriverTab({ dev, msg, onDetails, onUpdate, onRollback, onDisable, onEnable, onUninstall, canRollback, canDisable, canEnable }: {
+function DriverTab({ dev, msg, onDetails, onUpdate, onRollback, onDisable, onEnable, onUninstall, canRollback, canDisable, canEnable, canUninstall }: {
   dev: VDevice; msg: string | null;
   onDetails: () => void; onUpdate: () => void; onRollback: () => void; onDisable: () => void; onEnable: () => void; onUninstall: () => void;
   canRollback: boolean; canDisable: boolean; canEnable: boolean; canUninstall: boolean;

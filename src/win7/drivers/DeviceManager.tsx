@@ -28,7 +28,7 @@ export interface DMActions {
   openProps: (id: string) => void;
   updateDriver: (id: string) => void;
   uninstall: (id: string) => void;
-  toggleDisable: (id: string) => void;
+  toggleDisable: (id: string, disabled?: boolean) => void;
   scan: () => void;
 }
 
@@ -40,6 +40,7 @@ export function DeviceManagerWindow({ onClose, onMinimize, top, left, z }: { onC
   const [propsId, setPropsId] = useState<string | null>(null);
   const [wizardId, setWizardId] = useState<string | null>(null);
   const [confirmUninstall, setConfirmUninstall] = useState<VDevice | null>(null);
+  const [deleteDrvChecked, setDeleteDrvChecked] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
 
@@ -67,10 +68,10 @@ export function DeviceManagerWindow({ onClose, onMinimize, top, left, z }: { onC
     openProps: (id) => setPropsId(id),
     updateDriver: (id) => setWizardId(id),
     uninstall: (id) => { const d = devices.find((x) => x.id === id); if (d) setConfirmUninstall(d); },
-    toggleDisable: (id) => {
+    toggleDisable: (id, disabled) => {
       const d = devices.find((x) => x.id === id);
       if (!d) return;
-      setDisabled(id, d.state !== 'disabled');
+      setDisabled(id, disabled ?? d.state !== 'disabled');
     },
     scan: doScan,
   };
@@ -168,8 +169,8 @@ export function DeviceManagerWindow({ onClose, onMinimize, top, left, z }: { onC
       {confirmUninstall && (
         <TaskDialog title="Windows 7 Simulator" icon="⚠️"
           text={`Are you sure you want to uninstall this device?\n\n${confirmUninstall.name}`}
-          footer={<label className="flex items-center gap-2"><input type="checkbox" id="delDrv" className="accent-[#1d528c]" />Delete the driver software for this device.</label>}
-          buttons={<><WinButton onClick={() => setConfirmUninstall(null)}>Cancel</WinButton><WinButton primary onClick={() => { uninstallDevice(confirmUninstall.id); showToast(`The driver for "${confirmUninstall.name}" was uninstalled. The device now requires driver software. (Code 28)`); setConfirmUninstall(null); setPropsId(null); }}>OK</WinButton></>}
+          footer={<label className="flex items-center gap-2 text-[12px]"><input type="checkbox" checked={deleteDrvChecked} onChange={(e) => setDeleteDrvChecked(e.target.checked)} className="accent-[#1d528c]" />Delete the driver software for this device.</label>}
+          buttons={<><WinButton onClick={() => setConfirmUninstall(null)}>Cancel</WinButton><WinButton primary onClick={() => { uninstallDevice(confirmUninstall.id, deleteDrvChecked); showToast(`The driver for "${confirmUninstall.name}" was uninstalled.${deleteDrvChecked ? ' The driver software was deleted from the driver store.' : ' The device now requires driver software. (Code 28)'} `); setDeleteDrvChecked(false); setConfirmUninstall(null); setPropsId(null); }}>OK</WinButton></>}
           onClose={() => setConfirmUninstall(null)} />
       )}
 

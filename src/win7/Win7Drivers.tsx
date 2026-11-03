@@ -41,7 +41,9 @@ function Win7DesktopInner({ userName, computerName, officeInstalled, officeVersi
   const [showStart, setShowStart] = useState(false);
   const [searchQ, setSearchQ] = useState('');
   const [desktopMenu, setDesktopMenu] = useState<{ x: number; y: number } | null>(null);
+  const [compMenu, setCompMenu] = useState<{ x: number; y: number } | null>(null);
   const [taskEnd, setTaskEnd] = useState(false);
+  const [showWelcomeOnce, setShowWelcomeOnce] = useState(true);
   const [notif, setNotif] = useState<{ title: string; body: string; action?: () => void } | null>(null);
   const [clock, setClock] = useState(new Date());
   // Restart flow: off -> boot -> welcome -> login -> ready ; or 'shutdown'
@@ -115,6 +117,17 @@ function Win7DesktopInner({ userName, computerName, officeInstalled, officeVersi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [restarting]);
 
+  // Restart-required prompt when a driver package flags a pending restart
+  const prevPendingRef = useRef<string | null>(null);
+  const [restartPrompt, setRestartPrompt] = useState<string | null>(null);
+  useEffect(() => {
+    const key = pendingRestart ? pendingRestart.reason : null;
+    if (key && key !== prevPendingRef.current && !restarting) setRestartPrompt(key);
+    if (!key) setRestartPrompt(null);
+    prevPendingRef.current = key;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRestart]);
+
   // ── Start menu search results ──────────────────────────────────────────────
   const searchResults = searchQ.trim() ? START_ITEMS.filter((i) => i.label.toLowerCase().includes(searchQ.trim().toLowerCase())).slice(0, 6) : [];
 
@@ -123,13 +136,15 @@ function Win7DesktopInner({ userName, computerName, officeInstalled, officeVersi
   return (
     <div className="w-full h-full flex flex-col relative overflow-hidden select-none" style={{ fontFamily: "'Segoe UI', Tahoma, sans-serif" }}>
       {/* Wallpaper */}
-      <div className="absolute inset-0 bg-gradient-to-b from-[#1a5276] via-[#1e88c8] to-[#0d3b5e]" onMouseDown={() => { setShowStart(false); setDesktopMenu(null); }}>
+      <div className="absolute inset-0 bg-gradient-to-b from-[#1a5276] via-[#1e88c8] to-[#0d3b5e]" onMouseDown={() => { setShowStart(false); setDesktopMenu(null); setCompMenu(null); }}>
         <div className="absolute top-1/4 left-1/2 transform -translate-x-1/2 w-[600px] h-[600px] bg-[#64b5f6]/20 rounded-full blur-3xl"></div>
       </div>
 
       {/* Desktop icons */}
       <div className="relative z-10 p-3 grid grid-cols-1 gap-2 w-24">
-        <DesktopIcon icon="💻" label="Computer" onClick={() => launch('comp')} />
+        <div onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); setShowStart(false); setDesktopMenu(null); setCompMenu({ x: e.clientX, y: e.clientY }); }}>
+          <DesktopIcon icon="💻" label="Computer" onClick={() => launch('comp')} />
+        </div>
         <DesktopIcon icon="🗑️" label="Recycle Bin" onClick={() => pushNotif('Recycle Bin', 'The Recycle Bin is empty.') as unknown as void} />
         <DesktopIcon icon="📁" label="File Manager" onClick={() => launch('filemanager')} />
         <DesktopIcon icon="🧩" label="Device Manager" onClick={() => launch('devmgr')} />
@@ -162,6 +177,30 @@ function Win7DesktopInner({ userName, computerName, officeInstalled, officeVersi
             <div key={i} onClick={it.dis ? undefined : () => { it.fn?.(); setDesktopMenu(null); }}
               className={`px-6 py-[4px] text-[12px] ${it.dis ? 'text-gray-400' : 'text-[#1e2b3b] hover:bg-[#91c9f7]'} cursor-default`}
               style={{ margin: '0 2px' }}>{it.l}{it.sub ? ' ▸' : ''}</div>
+          ))}
+        </div>
+      )}
+
+      {/* Computer icon context menu (right-click Computer → Properties → Device Manager path) */}
+      {compMenu && (
+        <div className="fixed z-[200] py-1 rounded-[3px]" onMouseDown={(e) => e.stopPropagation()}
+          style={{ left: compMenu.x, top: compMenu.y, minWidth: 200, background: '#f7f7f7', border: '1px solid #9b9b9b', boxShadow: '2px 3px 10px rgba(0,0,0,.35)' }}>
+          {[
+            { l: 'Open', fn: () => launch('comp') },
+            { l: 'Explore', fn: () => launch('explorer') },
+            { sep: true },
+            { l: 'Manage', fn: () => { launch('sysprops'); } },
+            { l: 'Search', dis: true },
+            { l: 'Pin to Taskbar', dis: true },
+            { l: 'Create shortcut', dis: true },
+            { l: 'Delete', dis: true },
+            { l: 'Rename', dis: true },
+            { sep: true },
+            { l: 'Properties', fn: () => launch('comp') },
+          ].map((it: any, i) => it.sep ? <div key={i} className="my-1 mx-1 border-t border-[#d6d6d6]" /> : (
+            <div key={i} onClick={it.dis ? undefined : () => { it.fn?.(); setCompMenu(null); }}
+              className={`px-6 py-[4px] text-[12px] ${it.dis ? 'text-gray-400' : 'text-[#1e2b3b] hover:bg-[#91c9f7]'} cursor-default`}
+              style={{ margin: '0 2px' }}>{it.l}</div>
           ))}
         </div>
       )}
@@ -237,7 +276,7 @@ function Win7DesktopInner({ userName, computerName, officeInstalled, officeVersi
               <div className="mt-1 rounded-[3px] overflow-hidden" style={{ background: '#1d2b3d', border: '1px solid #3a5a80' }}>
                 <div className="text-[10px] text-[#9fc0e0] px-2 py-1">Best Match</div>
                 {searchResults.map((r) => (
-                  <div key={r.id} onClick={() => { r.run(launch, pushNotif); setSearchQ(''); }}
+                  <div key={r.id} onClick={() => { r.run?.(launch, pushNotif); setSearchQ(''); }}
                     className="flex items-center gap-2 px-2 py-[5px] text-[12px] text-white hover:bg-[#3a5a80] cursor-pointer">
                     <span>{WIN_ICON(r.id)}</span><span>{r.label}</span>
                   </div>
@@ -293,6 +332,30 @@ function Win7DesktopInner({ userName, computerName, officeInstalled, officeVersi
             <div className="flex gap-3">
               <button onClick={(e) => { e.stopPropagation(); setTaskEnd(false); }} className="px-5 py-1 rounded-[3px] text-[12px] text-white" style={{ background: 'linear-gradient(180deg,#5b9bd5,#2f6fad)', border: '1px solid #2a5c94' }}>Cancel</button>
               <button onClick={(e) => { e.stopPropagation(); setTaskEnd(false); doShutdown(); }} className="px-5 py-1 rounded-[3px] text-[12px] text-white" style={{ background: 'linear-gradient(180deg,#e05a50,#a3241d)', border: '1px solid #7c1b16' }}>Yes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Restart required prompt (Windows 7 style) */}
+      {restartPrompt && !restarting && (
+        <div className="absolute inset-0 z-[250] flex items-center justify-center bg-black/25" onMouseDown={(e) => e.stopPropagation()}>
+          <div className="rounded-[6px] overflow-hidden w-[440px]" style={{ background: '#f0f0f0', border: '1px solid rgba(60,92,140,.9)', boxShadow: '0 12px 40px rgba(0,0,0,.5)' }}>
+            <div className="flex items-center justify-between pl-3 pr-1 h-[30px]" style={{ background: 'linear-gradient(180deg, rgba(190,220,250,.95), rgba(120,170,225,.95))', borderBottom: '1px solid rgba(90,130,190,.6)' }}>
+              <span className="text-[12px] text-[#0c2b52]">Windows 7 Simulator</span>
+              <span className="w-[22px] text-center text-[11px] cursor-pointer" onClick={() => setRestartPrompt(null)}>✕</span>
+            </div>
+            <div className="bg-white px-5 py-4 flex gap-4">
+              <div className="text-[34px] leading-none pt-1">🔄</div>
+              <div className="flex-1 text-[12px] text-[#1e2b3b]">
+                <div className="text-[14px] mb-2">You must restart your computer to apply recent changes.</div>
+                <div className="text-[#444]">{restartPrompt}</div>
+                <label className="mt-3 flex items-center gap-2 text-[11px] text-gray-600"><input type="checkbox" className="accent-[#1d528c]" defaultChecked /> Log off automatically and attempt to restart my applications when I log on.</label>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-4 py-3" style={{ background: '#f0f0f0', borderTop: '1px solid #dfdfdf' }}>
+              <button onClick={() => setRestartPrompt(null)} className="px-6 py-[6px] rounded-[3px] text-[12px]" style={{ background: 'linear-gradient(180deg,#fdfdfd,#e3e3e3)', border: '1px solid #adadad', boxShadow: 'inset 0 1px 0 #fff' }}>Restart Later</button>
+              <button onClick={() => { setRestartPrompt(null); beginRestart(); }} className="px-6 py-[6px] rounded-[3px] text-[12px] text-white" style={{ background: 'linear-gradient(180deg,#5b9bd5,#2f6fad)', border: '1px solid #2a5c94' }}>Restart Now</button>
             </div>
           </div>
         </div>
@@ -361,13 +424,13 @@ const START_RIGHT: Array<{ id: string; label: string; run?: Run }> = [
   { id: 'printer', label: 'Devices and Printers' },
   { id: 'help', label: 'Help and Support' },
 ];
-const START_ITEMS = [
+const START_ITEMS: Array<{ id: string; label: string; run?: Run }> = [
   ...START_LEFT, ...START_RIGHT,
-  { id: 'computer', label: 'Computer', run: (l: Run extends never ? never : (id: string) => void) => l('comp') as never },
-].filter(Boolean) as Array<{ id: string; label: string; run?: Run }>;
-START_ITEMS.push({ id: 'comp', label: 'View basic information about your computer', run: (l) => l('comp') });
-START_ITEMS.push({ id: 'sysprops', label: 'System Properties (msconfig-style)', run: (l) => l('sysprops') });
-START_ITEMS.push({ id: 'actioncenter', label: 'Action Center', run: (l) => l('actioncenter') });
+  { id: 'computer', label: 'Computer', run: (l) => l('comp') },
+  { id: 'comp', label: 'View basic information about your computer', run: (l) => l('comp') },
+  { id: 'sysprops', label: 'System Properties', run: (l) => l('sysprops') },
+  { id: 'actioncenter', label: 'Action Center', run: (l) => l('actioncenter') },
+];
 
 function WIN_ICON(id: string): string {
   if (id === 'devmgr') return '🧩';

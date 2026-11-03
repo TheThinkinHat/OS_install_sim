@@ -53,7 +53,7 @@ interface DriverContextValue {
   getDevice: (id: string) => VDevice | undefined;
   /** Apply an already-validated package to a device (shared by wizard + installers). */
   applyPackage: (deviceId: string, pkgId: string) => InstallOutcome;
-  uninstallDevice: (deviceId: string) => void;
+  uninstallDevice: (deviceId: string, deleteDriverSoftware?: boolean) => void;
   setDisabled: (deviceId: string, disabled: boolean) => void;
   rollBack: (deviceId: string) => { ok: boolean; message: string };
   scanForChanges: () => number;
@@ -114,10 +114,12 @@ export function DriverProvider({ children }: { children: ReactNode }) {
     return { success: true, requiresReboot: pkg.requiresReboot };
   }, []);
 
-  const uninstallDevice = useCallback((deviceId: string) => {
+  const uninstallDevice = useCallback((deviceId: string, deleteDriverSoftware?: boolean) => {
     setDevices((prev) => prev.map((d) => d.id === deviceId ? {
       ...d,
-      previousDrivers: d.driver ? [d.driver, ...d.previousDrivers] : d.previousDrivers,
+      // "Delete the driver software for this device" discards version history,
+      // which disables Roll Back Driver afterwards.
+      previousDrivers: deleteDriverSoftware ? [] : (d.driver ? [d.driver, ...d.previousDrivers] : d.previousDrivers),
       driver: undefined,
       state: 'no-driver' as DeviceState,
       errorCode: 28,

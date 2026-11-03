@@ -181,7 +181,7 @@ export function TaskDialog({ title, icon, text, children, footer, buttons, onClo
   buttons: ReactNode; onClose?: () => void; width?: number;
 }) {
   return (
-    <div className="absolute inset-0 z-[150] flex items-center justify-center bg-black/25" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/25" onMouseDown={onClose}>
       <div onMouseDown={(e) => e.stopPropagation()} className="rounded-[6px] overflow-hidden" style={{
         ...SEGOE, width, background: '#f0f0f0',
         border: '1px solid rgba(60,92,140,0.9)',

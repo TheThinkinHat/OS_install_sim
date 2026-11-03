@@ -205,7 +205,7 @@ export function ControlPanelWindow({ os, onClose, onNavigate, top = 40, left = 1
           <div className="text-[17px] text-[#003399] mb-3" style={{ fontWeight: 300 }}>
             {path.length ? 'System and Security' : 'Control Panel (Classic View)'}
           </div>
-          {!path.length && os === 'win7' && (
+          {!path.length && os === 'windows7' && (
             <div className="mb-4 rounded-[3px] border border-[#cfd8e6] bg-[#fbfdff] px-3 py-2 text-[12px] flex items-center gap-2">
               <span>ℹ️</span>
               <span>Driver store contains {DRIVER_PACKAGES.length} packages · {warnCount > 0 ? `${warnCount} devices need driver software` : 'all devices have driver software'}.</span>
