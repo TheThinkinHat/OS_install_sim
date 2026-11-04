@@ -359,7 +359,7 @@ function RestartButtons() {
 
 function UpdateHistory() {
   const { updateHistory } = useDrivers();
-  const cats = ['Driver Updates', 'Quality Updates', 'Definition Updates', 'Other Updates'] as const;
+  const cats = ['Driver Updates', 'Quality Updates', '.NET Frameworks', 'Definition Updates', 'Other Updates'] as const;
   return (
     <div className="mb-4 border border-[#e1e1e1] max-w-[720px]">
       <div className="px-4 py-2 bg-[#f7fafd] text-[14px] font-medium border-b border-[#e1e1e1]">Update history</div>
