@@ -3,9 +3,10 @@
 
 import { useMemo, useRef, useState } from 'react';
 import type { DriverPackage, ManufacturerInstaller } from './types';
-import { DRIVER_FILESYSTEM, MANUFACTURER_INSTALLERS, listFolder, packageForInfFile } from './data';
+import { MANUFACTURER_INSTALLERS, packageForInfFile } from './data';
+import { activeFilesystem, fsListFolder as listFolder } from './service';
 import { AeroWindow, ContextMenu, SEGOE } from './ui';
-import { useDrivers } from './service';
+import { catalog, useDrivers } from './service';
 import { InfInstallDialog } from './InfInstall';
 
 export function ExplorerWindow({ startPath = 'C:\\', onClose, onLaunchInstaller, top = 56, left = 200, z = 55 }: {

@@ -9,9 +9,14 @@ import type {
   VDevice, DriverPackage, StoredDriverPackage, RestartRequest, UpdateHistoryEntry, DeviceEventRec,
 } from './types';
 import {
-  DRIVER_PACKAGES, SYSTEM_ARCH, OS_NAME, createInitialDevices, initialStoredPackages, hiddenDevicesForScan,
+  DRIVER_PACKAGES, DRIVER_FILESYSTEM, listFolder, SYSTEM_ARCH, OS_NAME, OS_VERSION_LABEL, OS_BUILD, OS_INSTALL_DATE,
+  createInitialDevices, initialStoredPackages, hiddenDevicesForScan, DEVICE_CATEGORIES,
 } from './data';
 
+// ── Active profile (module-level mirror for non-hook call sites) ────────────
+// Components that use the driver service run exclusively inside a
+// DriverProvider; the provider sets this mirror on mount. The default keeps
+// the original Windows 10 behavior byte-for-byte when no profile is injected.
 export interface InstallOutcome {
   success: boolean;
   message?: string;
@@ -23,6 +28,113 @@ export interface InstallOutcome {
 
 export type InstallSource = 'dm-wizard' | 'wu-optional' | 'wu-auto' | 'installer' | 'inf-context' | 'pnputil';
 
+// ── OS profile injection (§ Windows 11 task) ────────────────────────────────
+// The driver subsystem is shared between the Windows 10 and Windows 11 shells.
+// A shell selects its profile via <DriverProvider profile={...}>. When no
+// profile is supplied the service falls back to the original Windows 10 Pro
+// 22H2 constants, so the existing Win10 simulation behaves EXACTLY as before.
+export interface ProfileConfig {
+  key: 'win10' | 'win11';
+  osName: string;            // "Windows 10 Pro" / "Windows 11 Pro"
+  osVersionLabel: string;    // "Version 22H2" / "Version 24H2"
+  osBuild: string;           // "22H2, build 19045.3803" / "24H2, build 26100.2605"
+  buildNumber: string;       // "19045.3803" / "26100.2605"
+  installDate: string;
+  experiencePack?: string;   // shown on the Settings About page (Win11)
+  winVer: '10' | '11';       // which OS names a package must support
+  /** Catalog KB ids are versioned per OS so update titles stay authentic */
+  cumulativeKB: string;
+  dotnetKB: string;
+  seedHistory?: Omit<UpdateHistoryEntry, 'id'>[];
+  /** Device Manager category order (defaults to the Win10 set). */
+  categories?: string[];
+  /** Per-OS virtual driver filesystem (defaults to the Win10 tree). */
+  filesystem?: Record<string, import('./data').FsNode[]>;
+  /** Inbox-driver version prefix, e.g. "10.0.26100" for Windows 11 24H2. */
+  inboxVersionPrefix?: string;
+  /** Profile-only driver packages appended to the localized base catalog. */
+  extraPackages?: DriverPackage[];
+}
+
+export const WIN10_PROFILE: ProfileConfig = {
+  key: 'win10',
+  osName: OS_NAME,
+  osVersionLabel: OS_VERSION_LABEL,
+  osBuild: OS_BUILD,
+  buildNumber: OS_BUILD.split(', ')[1]?.replace('build ', '') ?? '19045.3803',
+  installDate: OS_INSTALL_DATE,
+  winVer: '10',
+  cumulativeKB: 'KB5034119',
+  dotnetKB: 'KB5034146',
+};
+
+const DEFAULT_PROFILE: ProfileConfig = WIN10_PROFILE;
+
+let ACTIVE_PROFILE: ProfileConfig = WIN10_PROFILE;
+export function setActiveProfile(p: ProfileConfig) { ACTIVE_PROFILE = p; }
+export function activeProfile(): ProfileConfig { return ACTIVE_PROFILE; }
+/** Catalog remapped for the active OS profile (identity on Win10). */
+export function catalog(): DriverPackage[] {
+  if (ACTIVE_PROFILE.key === 'win10') return DRIVER_PACKAGES;
+  return [...DRIVER_PACKAGES.map((p) => localizePkg(p, ACTIVE_PROFILE)), ...(ACTIVE_PROFILE.extraPackages ?? [])];
+}
+/** Virtual driver filesystem for the active OS profile (Win11 adds Downloads packages). */
+export function activeFilesystem(): Record<string, import('./data').FsNode[]> {
+  return ACTIVE_PROFILE.filesystem ?? DRIVER_FILESYSTEM;
+}
+/** Profile-aware folder listing (identity on Windows 10). */
+export function fsListFolder(path: string): import('./data').FsNode[] {
+  return listFolder(path, activeFilesystem());
+}
+/** Device Manager category order for the active profile. */
+export function activeCategories(): string[] {
+  return ACTIVE_PROFILE.categories ?? DEVICE_CATEGORIES;
+}
+export function pkgInCatalog(id: string): DriverPackage | undefined {
+  return catalog().find((p) => p.id === id);
+}
+
+/** Remap OS-specific catalog strings for the given Windows version. */
+export function localizePkgFor(p: DriverPackage, winVer: '10' | '11'): DriverPackage {
+  if (winVer === '10') return p;
+  const prof = { winVer } as Pick<ProfileConfig, 'winVer'> & { osVersionLabel?: string; cumulativeKB?: string; dotnetKB?: string };
+  const s = (t: string) => t
+    .split('Windows 10 Version 22H2').join(`Windows 11 Version 24H2`)
+    .split('for Windows 10 for x64').join('for Windows 11 for x64')
+    .split('Windows 10 Version').join('Windows 11 Version')
+    .split('Windows 10').join('Windows 11')
+    .split('KB5034119').join(prof.cumulativeKB ?? 'KB5046617')
+    .split('KB5034146').join(prof.dotnetKB ?? 'KB5046631');
+  return {
+    ...p,
+    displayName: s(p.displayName),
+    osSupport: p.osSupport.map((o) => o === 'Windows 10' ? 'Windows 11' : o),
+    wu: p.wu ? { ...p.wu, title: s(p.wu.title) } : undefined,
+    note: p.note ? s(p.note) : undefined,
+  };
+}
+
+/** Remap OS-specific catalog strings when running under a different profile. */
+function localizePkg(p: DriverPackage, prof: ProfileConfig): DriverPackage {
+  if (prof.key === 'win10') return p;
+  const s = (t: string) => t
+    .split('Windows 10 Version 22H2').join(`Windows ${prof.winVer} Version ${prof.osVersionLabel.replace('Version ', '')}`)
+    .split('for Windows 10 for x64').join(`for Windows ${prof.winVer} for x64`)
+    .split('Windows 10 Version').join(`Windows ${prof.winVer} Version`)
+    .split('Windows 10').join(`Windows ${prof.winVer}`)
+    .split('KB5034119').join(prof.cumulativeKB)
+    .split('KB5034146').join(prof.dotnetKB);
+  return {
+    ...p,
+    displayName: s(p.displayName),
+    osSupport: p.osSupport.map((o) => o === 'Windows 10' ? `Windows ${prof.winVer}` : o),
+    wu: p.wu ? { ...p.wu, title: s(p.wu.title) } : undefined,
+    note: p.note ? s(p.note) : undefined,
+    // Inbox drivers carry the OS build number — remap them under Win11.
+    version: prof.inboxVersionPrefix ? p.version.replace(/^10\.0\.\d+/, prof.inboxVersionPrefix) : p.version,
+  };
+}
+
 interface PersistedState {
   devices: VDevice[];
   store: StoredDriverPackage[];
@@ -33,11 +145,13 @@ interface PersistedState {
   scanned: boolean;
 }
 
-const LS_KEY = 'win10-driver-state-v1';
+function lsKeyFor(prof: ProfileConfig): string {
+  return prof.key === 'win10' ? 'win10-driver-state-v1' : `win11-driver-state-${prof.key}-v1`;
+}
 
-function loadPersisted(): PersistedState | null {
+function loadPersisted(prof: ProfileConfig): PersistedState | null {
   try {
-    const raw = localStorage.getItem(LS_KEY);
+    const raw = localStorage.getItem(lsKeyFor(prof));
     if (!raw) return null;
     const p = JSON.parse(raw) as PersistedState;
     if (!Array.isArray(p.devices) || !Array.isArray(p.store)) return null;
@@ -45,8 +159,8 @@ function loadPersisted(): PersistedState | null {
   } catch { return null; }
 }
 
-function savePersisted(p: PersistedState) {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(p)); } catch { /* ignore */ }
+function savePersisted(p: PersistedState, prof: ProfileConfig) {
+  try { localStorage.setItem(lsKeyFor(prof), JSON.stringify(p)); } catch { /* ignore */ }
 }
 
 export function nowStamp(): string {
@@ -76,7 +190,8 @@ export function classNameOf(pkg: DriverPackage): string {
 
 // ── Compatibility validation (§9.2 / §10 / §21) ──────────────────────────────
 export function validateDriverPackage(dev: VDevice, packageId: string): { ok: boolean; reason?: string } {
-  const pkg = DRIVER_PACKAGES.find((p) => p.id === packageId);
+  const prof = ACTIVE_PROFILE;
+  const pkg = catalog().find((p) => p.id === packageId);
   if (!pkg) return { ok: false, reason: 'The specified driver package could not be found in the driver catalog.' };
   const hasInf = pkg.files.some((f) => f.toLowerCase().endsWith('.inf'));
   if (!hasInf) return { ok: false, reason: `The driver package "${pkg.files[0] ?? packageId}" is invalid: no setup information file (.inf) was found.` };
@@ -85,8 +200,8 @@ export function validateDriverPackage(dev: VDevice, packageId: string): { ok: bo
   if (!matched) {
     return { ok: false, reason: `The driver package did not match the hardware identifiers of this device.\n\nDevice hardware ID: ${dev.hardwareId}\nPackage supports: ${pkg.matchesHardwareIds.join(', ') || '(no hardware IDs)'}` };
   }
-  if (!pkg.osSupport.some((os) => OS_NAME.startsWith(os))) {
-    return { ok: false, reason: `This driver package is not compatible with ${OS_NAME}. Supported operating systems: ${pkg.osSupport.join(', ')}.` };
+  if (!pkg.osSupport.some((os) => prof.osName.startsWith(os))) {
+    return { ok: false, reason: `This driver package is not compatible with ${prof.osName}. Supported operating systems: ${pkg.osSupport.join(', ')}.` };
   }
   if (!pkg.arch.includes(SYSTEM_ARCH)) {
     return { ok: false, reason: `This driver package (${pkg.arch.join('/')}-bit) is not compatible with the ${SYSTEM_ARCH}-bit version of Windows.` };
@@ -99,7 +214,7 @@ export function evaluateSignature(pkg: DriverPackage): { level: 'ok' | 'warn' | 
   if (pkg.signed) return { level: 'ok', reason: `The driver package is digitally signed by ${pkg.signer}. Catalog verification passed.` };
   const kernelMode = pkg.files.some((f) => f.toLowerCase().endsWith('.sys'));
   if (kernelMode) {
-    return { level: 'block', reason: 'Windows 10 cannot install this kernel-mode driver because it does not have a valid digital signature. Kernel-mode drivers must be signed by Microsoft (WHQL) or an authorized publisher. You can obtain a signed package from the hardware manufacturer, or restart the PC with driver signature enforcement disabled.' };
+    return { level: 'block', reason: `${ACTIVE_PROFILE.osName} cannot install this kernel-mode driver because it does not have a valid digital signature. Kernel-mode drivers must be signed by Microsoft (WHQL) or an authorized publisher. You can obtain a signed package from the hardware manufacturer, or restart the PC with driver signature enforcement disabled.` };
   }
   return { level: 'warn', reason: 'Windows can\'t verify the publisher of this driver software. The digital signature of the package could not be confirmed.' };
 }
@@ -116,7 +231,7 @@ function cmpVersion(a: string, b: string): number {
 /** Best-match selection rules used by "Search automatically for drivers" (§8).
  *  Automatic search deliberately does NOT guarantee a newer driver. */
 export function findBestAutomaticDriver(dev: VDevice): { pkg: DriverPackage | null; bestAlreadyInstalled: boolean } {
-  const matches = DRIVER_PACKAGES
+  const matches = catalog()
     .filter((p) => p.wu?.kind !== 'quality' && p.wu?.kind !== 'definition' && p.wu?.kind !== 'system')
     .filter((p) => validateDriverPackage(dev, p.id).ok)
     .sort((a, b) => cmpVersion(b.version, a.version) || (new Date(b.date).getTime() - new Date(a.date).getTime()));
@@ -136,6 +251,8 @@ export interface DriverCtx {
   pendingRestart: RestartRequest | null;
   wuInstalledIds: string[];
   signingEnforcement: boolean;
+  /** Active OS profile. Win10 shell leaves this as the original Win10 defaults. */
+  profile: ProfileConfig;
   setSigningEnforcement: (v: boolean) => void;
   statusText: (d: VDevice) => string;
   packageById: (id?: string) => DriverPackage | undefined;
@@ -187,11 +304,13 @@ function pushEvent(d: VDevice, kind: DeviceEventRec['kind'], text: string): VDev
   return { ...d, events: [{ kind, date: nowStamp(), text }, ...(d.events ?? [])].slice(0, 40) };
 }
 
-export function DriverProvider({ children }: { children: React.ReactNode }) {
-  const persisted = useMemo(loadPersisted, []);
-  const [devices, setDevices] = useState<VDevice[]>(persisted?.devices ?? createInitialDevices());
+export function DriverProvider({ children, profile }: { children: React.ReactNode; profile?: ProfileConfig }) {
+  const prof = profile ?? DEFAULT_PROFILE;
+  setActiveProfile(prof); // module-level mirror for non-hook helpers & portals
+  const persisted = useMemo(() => loadPersisted(prof), [prof]);
+  const [devices, setDevices] = useState<VDevice[]>(persisted?.devices ?? createInitialDevices(prof.key === 'win11' ? 'win11' : 'win10'));
   const [store, setStore] = useState<StoredDriverPackage[]>(persisted?.store ?? initialStoredPackages());
-  const [updateHistory, setUpdateHistory] = useState<UpdateHistoryEntry[]>(persisted?.history ?? DEFAULT_HISTORY);
+  const [updateHistory, setUpdateHistory] = useState<UpdateHistoryEntry[]>(persisted?.history ?? (prof.seedHistory ? prof.seedHistory.map((h, i) => ({ ...h, id: `h-seed-${i}` })) : DEFAULT_HISTORY));
   const [pendingRestart, setPendingRestart] = useState<RestartRequest | null>(persisted?.pendingRestart ?? null);
   const [wuInstalledIds, setWuInstalledIds] = useState<string[]>(persisted?.wuInstalledIds ?? []);
   const [signingEnforcement, setSigningEnforcement] = useState(true);
@@ -201,10 +320,10 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   storeRef.current = store;
 
   useEffect(() => {
-    savePersisted({ devices, store, history: updateHistory, pendingRestart, wuInstalledIds, nextOem: nextOemRef.current, scanned: scannedRef.current });
+    savePersisted({ devices, store, history: updateHistory, pendingRestart, wuInstalledIds, nextOem: nextOemRef.current, scanned: scannedRef.current }, prof);
   }, [devices, store, updateHistory, pendingRestart, wuInstalledIds]);
 
-  const packageById = useCallback((id?: string) => (id ? DRIVER_PACKAGES.find((p) => p.id === id) : undefined), []);
+  const packageById = useCallback((id?: string) => (id ? catalog().find((p) => p.id === id) : undefined), []);
 
   const statusText = useCallback(statusTextFor, []);
 
@@ -232,7 +351,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   /** Central installation pipeline (§10). Every UI path funnels through here. */
   const applyPackage = useCallback((deviceId: string, packageId: string, opts?: { source?: InstallSource; forceUnsigned?: boolean }): InstallOutcome => {
     const dev = devices.find((d) => d.id === deviceId);
-    const pkg = DRIVER_PACKAGES.find((p) => p.id === packageId);
+    const pkg = pkgInCatalog(packageId);
     if (!dev) return { success: false, message: 'The target device is no longer present in the system.' };
     if (!pkg) return { success: false, message: 'The specified driver package could not be found.' };
 
@@ -285,7 +404,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
     if (!dev.previousDrivers.length || !dev.driver) return { ok: false, message: 'No previous driver software exists for this device.' };
     const prev = dev.previousDrivers[0];
     const prevPkgId = dev.previousPackageIds[0];
-    const prevPkg = DRIVER_PACKAGES.find((p) => p.id === prevPkgId);
+    const prevPkg = pkgInCatalog(prevPkgId);
     setDevices((prevList) => prevList.map((d) => {
       if (d.id !== deviceId || !d.driver) return d;
       let nd: VDevice = {
@@ -318,7 +437,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       return nd;
     }));
     if (deleteDriverSoftware && pkgId) {
-      const infName = DRIVER_PACKAGES.find((p) => p.id === pkgId)?.files.find((f) => f.toLowerCase().endsWith('.inf'));
+      const infName = pkgInCatalog(pkgId)?.files.find((f) => f.toLowerCase().endsWith('.inf'));
       if (infName) setStore((prev) => prev.filter((s) => !(s.originalInf.toLowerCase() === infName.toLowerCase() && s.devicesInstalledOn.every((x) => x === deviceId))));
     }
   }, [devices]);
@@ -345,7 +464,7 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
       const next = [...prev];
       if (!scannedRef.current) {
         scannedRef.current = true;
-        for (const hd of hiddenDevicesForScan()) {
+        for (const hd of hiddenDevicesForScan(prof.key === 'win11' ? 'win11' : 'win10')) {
           if (!next.some((d) => d.id === hd.id)) {
             found.push(hd);
             next.push({ ...hd, events: [{ kind: 'configured', date: nowStamp(), text: 'New hardware detected during a hardware change scan.' }] });
@@ -378,24 +497,25 @@ export function DriverProvider({ children }: { children: React.ReactNode }) {
   }, [addHistory]);
 
   const resetAll = useCallback(() => {
-    try { localStorage.removeItem(LS_KEY); } catch { /* ignore */ }
-    setDevices(createInitialDevices());
+    try { localStorage.removeItem(lsKeyFor(prof)); } catch { /* ignore */ }
+    setDevices(createInitialDevices(prof.key === 'win11' ? 'win11' : 'win10'));
     setStore(initialStoredPackages());
-    setUpdateHistory(DEFAULT_HISTORY);
+    setUpdateHistory(prof.seedHistory ? prof.seedHistory.map((h, i) => ({ ...h, id: `h-seed-${i}` })) : DEFAULT_HISTORY);
     setPendingRestart(null);
     setWuInstalledIds([]);
     nextOemRef.current = 4;
     scannedRef.current = false;
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prof]);
 
   const value = useMemo<DriverCtx>(() => ({
-    devices, store, updateHistory, pendingRestart, wuInstalledIds, signingEnforcement,
+    devices, store, updateHistory, pendingRestart, wuInstalledIds, signingEnforcement, profile: prof,
     setSigningEnforcement, statusText, packageById, addToStore, applyPackage, rollBack,
     uninstallDevice, toggleDisable, setDisabled: (id: string, dis?: boolean) => toggleDisable(id, dis ?? true),
     scanHardwareChanges, scanForChanges: scanHardwareChanges,
     requestRestart, markRestartApplied,
     recordWuInstall, addHistory, resetAll,
-  }), [devices, store, updateHistory, pendingRestart, wuInstalledIds, signingEnforcement, statusText, packageById, addToStore, applyPackage, rollBack, uninstallDevice, toggleDisable, scanHardwareChanges, requestRestart, markRestartApplied, recordWuInstall, addHistory, resetAll]);
+  }), [devices, store, updateHistory, pendingRestart, wuInstalledIds, signingEnforcement, prof, statusText, packageById, addToStore, applyPackage, rollBack, uninstallDevice, toggleDisable, scanHardwareChanges, requestRestart, markRestartApplied, recordWuInstall, addHistory, resetAll]);
 
   return React.createElement(Ctx.Provider, { value }, children);
 }

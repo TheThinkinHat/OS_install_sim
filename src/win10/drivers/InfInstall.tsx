@@ -4,7 +4,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { DriverPackage, VDevice } from './types';
-import { OS_NAME, SYSTEM_ARCH } from './data';
+import { SYSTEM_ARCH } from './data';
+import { activeProfile } from './service';
 import { evaluateSignature, useDrivers, validateDriverPackage } from './service';
 import { AeroProgress, SEGOE, TaskDialog, WinButton } from './ui';
 
@@ -114,7 +115,7 @@ export function InfInstallDialog({ pkg, fileName, folder, z, onClose }: {
   if (stage.s === 'success') {
     return (
       <TaskDialog title="Driver Package Installer" width={480} icon="✅"
-        text={`The driver was installed successfully.\n\n${pkg.provider} — ${pkg.displayName}\nDriver version: ${pkg.version} (${OS_NAME}, ${SYSTEM_ARCH}-bit)\nDevice: ${stage.dev.name}`}
+        text={`The driver was installed successfully.\n\n${pkg.provider} — ${pkg.displayName}\nDriver version: ${pkg.version} (${activeProfile().osName}, ${SYSTEM_ARCH}-bit)\nDevice: ${stage.dev.name}`}
         footer={stage.reboot ? '⚠ A restart is required before the new driver will load. You can restart now or later from the Start menu.' : 'The device is ready to use. No restart is required.'}
         buttons={<WinButton primary wide onClick={onClose}>Close</WinButton>}
         onClose={onClose}

@@ -44,8 +44,8 @@ function ev(kind: import('./types').DeviceEventRec['kind'], text: string, date =
 }
 
 // ── Initial virtual device tree (§20) ────────────────────────────────────────
-export function createInitialDevices(): VDevice[] {
-  return [
+export function createInitialDevices(profile?: 'win10' | 'win11'): VDevice[] {
+  const base: VDevice[] = [
     // Audio inputs and outputs
     { id: 'aio-01', name: 'Speakers (Realtek High Definition Audio)', category: 'Audio inputs and outputs', manufacturer: 'Realtek', hardwareId: 'SWD\\\\VEN_REALTEK&DEV_AIO', compatibleIds: ['SWD\\\\VEN_REALTEK&DEV_AIO'], classGuid: '{534c4a5b-0000-1000-8000-00aa00389b71}', location: 'Realtek HD Audio 2nd output', state: 'no-driver', errorCode: 28, previousDrivers: [], previousPackageIds: [], resources: {}, details: {}, events: [ev('configured', 'Device configured.'), ev('not-started', 'Device not started — driver software required.')] },
     { id: 'aio-02', name: 'Microphone (High Definition Audio Device)', category: 'Audio inputs and outputs', manufacturer: 'Microsoft', hardwareId: 'SWD\\\\VEN_MSFT&DEV_MIC', compatibleIds: ['SWD\\\\VEN_MSFT&DEV_MIC'], classGuid: '{534c4a5b-0000-1000-8000-00aa00389b71}', location: 'HD Audio Bus', state: 'ok', driver: { provider: 'Microsoft', date: '7/14/2009', version: '10.0.19041.3570', signer: 'Microsoft Windows', signed: true, driverFiles: ['audioendpointright.sys'] }, previousDrivers: [], previousPackageIds: [], resources: {}, details: {}, events: [ev('configured', 'Device configured.'), ev('started', 'Device started.')] },
@@ -121,10 +121,25 @@ export function createInitialDevices(): VDevice[] {
     { id: 'usb-01', name: 'Intel(R) 100 Series/C230 Series Chipset Family USB 3.0 xHCI Controller - A123', category: 'Universal Serial Bus controllers', manufacturer: 'Intel Corporation', hardwareId: 'PCI\\\\VEN_8086&DEV_A123&REV_31', compatibleIds: ['PCI\\\\VEN_8086&DEV_A123'], classGuid: '{36fc9e60-c465-11cf-8056-444553540000}', location: 'PCI bus 0, device 20, function 0', state: 'ok', driver: { provider: 'Microsoft', date: '7/14/2009', version: '10.0.19041.3570', signer: 'Microsoft Windows', signed: true, driverFiles: ['USBXHCI.SYS', 'usbhub3.sys'] }, previousDrivers: [], previousPackageIds: [], resources: { irq: '16', memoryRanges: ['0xFED10000-0xFED10FFF'] }, details: {}, events: [ev('started', 'Device started.')] },
     { id: 'usb-02', name: 'USB Root Hub (USB 3.0)', category: 'Universal Serial Bus controllers', manufacturer: 'Microsoft', hardwareId: 'USB\\\\ROOT_HUB30', compatibleIds: ['USB\\\\ROOT_HUB30'], classGuid: '{36fc9e60-c465-11cf-8056-444553540000}', location: 'USB port 2 (device 2)', state: 'ok', driver: { provider: 'Microsoft', date: '7/14/2009', version: '10.0.19041.3570', signer: 'Microsoft Windows', signed: true, driverFiles: ['usbhub.sys'] }, previousDrivers: [], previousPackageIds: [], resources: {}, details: {}, events: [ev('started', 'Device started.')] },
   ];
+  if (profile === 'win11') {
+    // Windows 11 inventory extras: Firmware + Software components categories.
+    base.push(
+      { id: 'fw-01', name: 'UEFI Firmware', category: 'Firmware', manufacturer: 'American Megatrends Inc.', hardwareId: 'UEFI\\\\VEN_AMI&DEV_0001', compatibleIds: ['UEFI\\\\VEN_AMI'], classGuid: '{f2e7ba72-b5f9-4510-9ca5-f9e0c6eebb6f}', location: 'Firmware', state: 'ok', driver: { provider: 'Microsoft', date: '7/14/2009', version: '10.0.26100.1', signer: 'Microsoft Windows', signed: true, driverFiles: ['uefi.sys'] }, previousDrivers: [], previousPackageIds: [], resources: {}, details: {}, events: [ev('configured', 'Device configured.', '10/21/2024 08:41 AM'), ev('started', 'Device started.', '10/21/2024 08:41 AM')] },
+      { id: 'sc-01', name: 'Microsoft Hyper-V Virtual Machine Bus Push Data Channel', category: 'Software components', manufacturer: 'Microsoft', hardwareId: 'VMBUS\\\\{0E10A9C5-6852-46D2-B42E-C70B2BBD59F9}', compatibleIds: ['VMBUS\\\\GENERIC'], classGuid: '{5e7a2a8e-6a66-41d3-a3bd-b4395abaf09c}', location: 'Virtual machine bus', state: 'ok', driver: { provider: 'Microsoft', date: '7/14/2009', version: '10.0.26100.1', signer: 'Microsoft Windows', signed: true, driverFiles: ['vmbusenum.sys'] }, previousDrivers: [], previousPackageIds: [], resources: {}, details: {}, events: [ev('configured', 'Device configured.', '10/21/2024 08:41 AM')] },
+    );
+    for (const d of base) {
+      const cat = CAT_REMAP_11[d.category];
+      if (cat) d.category = cat;
+      if (d.driver && /^10\.0\./.test(d.driver.version)) d.driver = { ...d.driver, version: d.driver.version.replace(/^10\.0\.\d+/, '10.0.26100') };
+      d.previousDrivers = d.previousDrivers.map((pd) => ({ ...pd, version: pd.version.replace(/^10\.0\.\d+/, '10.0.26100') }));
+      d.events = d.events?.map((e) => ({ ...e, date: e.date.replace('10/14/2022', '10/21/2024') }));
+    }
+  }
+  return base;
 }
 
 // ── Hidden hardware discovered by "Scan for hardware changes" (§16) ──────────
-export function hiddenDevicesForScan(): VDevice[] {
+export function hiddenDevicesForScan(profile?: 'win10' | 'win11'): VDevice[] {
   return [
     { id: 'scan-sd', name: 'Realtek PCIE CardReader', pendingName: 'Realtek PCIE CardReader', category: 'Storage controllers', manufacturer: 'Realtek Semiconductor Corp.', hardwareId: 'PCI\\\\VEN_10EC&DEV_525A&SUBSYS_123417AA&REV_01', compatibleIds: ['PCI\\\\VEN_10EC&DEV_525A'], classGuid: '{4d36e97b-e325-ce11-bfc1-08002be10318}', location: 'PCI bus 0, device 21, function 0', state: 'no-driver', errorCode: 28, previousDrivers: [], previousPackageIds: [], resources: { irq: '19', memoryRanges: ['0xFE600000-0xFE600FFF'] }, details: {}, events: [{ kind: 'configured', date: 'NOW', text: 'New hardware detected during scan.' }] },
     { id: 'scan-me', name: 'Intel(R) Management Engine Interface', pendingName: 'Intel(R) Management Engine Interface', category: 'System devices', manufacturer: 'Intel Corporation', hardwareId: 'PCI\\\\VEN_8086&DEV_16E4&SUBSYS_165517AA&REV_30', compatibleIds: ['PCI\\\\VEN_8086&DEV_16E4'], classGuid: '{4d36e97d-e325-ce11-bfc1-08002be10318}', location: 'PCI bus 0, device 22, function 0', state: 'no-driver', errorCode: 28, previousDrivers: [], previousPackageIds: [], resources: { irq: '16', memoryRanges: ['0xFED90000-0xFED93FFF'] }, details: {}, events: [{ kind: 'configured', date: 'NOW', text: 'New hardware detected during scan.' }] },
@@ -340,19 +355,86 @@ export const DRIVER_FILESYSTEM: Record<string, FsNode[]> = {
   ],
 };
 
-export function listFolder(path: string): FsNode[] {
-  return DRIVER_FILESYSTEM[path] ?? [];
+export function listFolder(path: string, fs: Record<string, FsNode[]> = DRIVER_FILESYSTEM): FsNode[] {
+  return fs[path] ?? [];
 }
 
-/** Packages whose .inf lives directly inside `folder` */
-export function packagesInFolder(folder: string): DriverPackage[] {
-  return DRIVER_PACKAGES.filter((p) => p.folder.toLowerCase() === folder.toLowerCase());
+/** Packages whose .inf lives directly inside `folder` (optionally within a profile catalog) */
+export function packagesInFolder(folder: string, catalog?: DriverPackage[]): DriverPackage[] {
+  const src = catalog ?? DRIVER_PACKAGES;
+  return src.filter((p) => p.folder.toLowerCase() === folder.toLowerCase());
 }
 
 /** Find the package represented by an .inf file node inside a folder listing */
-export function packageForInfFile(path: string, fileName: string): DriverPackage | undefined {
-  const nodes = listFolder(path);
+export function packageForInfFile(path: string, fileName: string, fs?: Record<string, FsNode[]>, catalog?: DriverPackage[]): DriverPackage | undefined {
+  const nodes = listFolder(path, fs);
   const node = nodes.find((n) => n.kind === 'file' && n.name.toLowerCase() === fileName.toLowerCase());
   if (!node?.packageIds?.length) return undefined;
-  return DRIVER_PACKAGES.find((p) => p.id === node.packageIds![0]);
+  return (catalog ?? DRIVER_PACKAGES).find((p) => p.id === node.packageIds![0]);
+}
+
+// ── Windows 11 profile mapping helpers (used by src/win11/config.ts) ─────────
+// These are PURE functions over the Win10 seed data. They are only invoked by
+// an explicitly injected ProfileConfig — the Windows 10 simulation never runs
+// through them, so its behavior is byte-for-byte unchanged.
+
+export const WIN11_DEVICE_CATEGORIES: string[] = [
+  'Audio inputs and outputs',
+  'Batteries',
+  'Bluetooth',
+  'Cameras',
+  'Computer',
+  'Disk drives',
+  'Display adapters',
+  'Firmware',
+  'Human Interface Devices',
+  'IDE ATA/ATAPI controllers',
+  'Keyboards',
+  'Mice and other pointing devices',
+  'Monitors',
+  'Network adapters',
+  'Ports (COM & LPT)',
+  'Print queues',
+  'Processors',
+  'Security devices',
+  'Software components',
+  'Sound, video and game controllers',
+  'Storage controllers',
+  'System devices',
+  'Universal Serial Bus controllers',
+];
+
+const CAT_REMAP_11: Record<string, string> = {
+  'Security devices': 'System devices',
+};
+
+/** Map a Win10-seeded virtual device onto the Windows 11 inventory. */
+export function mapDeviceToWin11(d: VDevice): VDevice {
+  const category = CAT_REMAP_11[d.category] ?? d.category;
+  const bump = (v?: string) => (v ? v.replace(/^10\.0\.\d+/, '10.0.26100') : v);
+  return {
+    ...d,
+    category,
+    driver: d.driver ? { ...d.driver, version: bump(d.driver.version) ?? d.driver.version } : undefined,
+    previousDrivers: d.previousDrivers.map((pd) => ({ ...pd, version: bump(pd.version) ?? pd.version })),
+    events: d.events?.map((e) => ({ ...e, date: e.date.replace('10/14/2022', '10/21/2024') })),
+  };
+}
+
+/** Build the Windows 11 virtual filesystem (adds C:\Users\User\Downloads packages). */
+export function buildWin11Filesystem(): Record<string, FsNode[]> {
+  const fs: Record<string, FsNode[]> = JSON.parse(JSON.stringify(DRIVER_FILESYSTEM));
+  fs['C:\\'] = [{ name: 'Drivers', kind: 'folder' }, { name: 'Program Files', kind: 'folder' }, { name: 'Users', kind: 'folder' }, { name: 'Windows', kind: 'folder' }];
+  fs['C:\\Users\\User\\Downloads'] = [
+    { name: 'NVIDIA_GeForce_552.44_Driver.exe', kind: 'file', icon: '📦', installerId: 'nvidia-setup', note: 'Downloaded from NVIDIA.com (simulated)' },
+    { name: 'Intel_WiFi_BT_Pack_22.240.1.exe', kind: 'file', icon: '📦', installerId: 'intel-wifi-setup', note: 'Downloaded from Intel.com (simulated)' },
+    { name: 'Realtek_HDA_Generic.zip', kind: 'folder', note: 'Extracted audio package folder' },
+    { name: 'driver_packs_readme.txt', kind: 'file', icon: '📄' },
+  ];
+  fs['C:\\Users\\User\\Downloads\\Realtek_HDA_Generic.zip'] = [
+    { name: 'RTKVHD64.inf', kind: 'file', icon: '📄', packageIds: ['rtk-hda'], note: 'Realtek HDA package (extracted)' },
+    { name: 'RTKVHD64.cat', kind: 'file', icon: '🛡️' },
+    { name: 'RTKVHD64.sys', kind: 'file', icon: '⚙️' },
+  ];
+  return fs;
 }

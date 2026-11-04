@@ -3,7 +3,8 @@
 
 import { useState } from 'react';
 import type { OSType } from '../../types';
-import { OS_BUILD, OS_NAME, SYSTEM_ARCH, DRIVER_PACKAGES } from './data';
+import { OS_BUILD, SYSTEM_ARCH } from './data';
+import { activeProfile, catalog } from './service';
 import { statusTextFor, useDrivers } from './service';
 import { AeroWindow, SEGOE, TaskDialog, WarnGlyph, WinButton } from './ui';
 
@@ -18,8 +19,8 @@ export function ComputerPropertiesWindow({ onClose, top = 40, left = 130, z = 62
         <div className="flex-1 border border-[#7f9db9] rounded-[2px] bg-white px-2 py-[3px] text-[12px] ml-1">Control Panel ▸ System and Security ▸ System</div>
       </div>
       <div className="flex-1 overflow-y-auto p-6" style={{ ...SEGOE, background: '#fff' }}>
-        <div className="text-[22px] text-[#003399] mb-1" style={{ fontWeight: 300 }}>{OS_NAME}</div>
-        <div className="text-[12px] text-gray-600 mb-5">{OS_BUILD} · Fully simulated environment — no host hardware is accessed.</div>
+        <div className="text-[22px] text-[#003399] mb-1" style={{ fontWeight: 300 }}>{activeProfile().osName}</div>
+        <div className="text-[12px] text-gray-600 mb-5">{activeProfile().osBuild} · Fully simulated environment — no host hardware is accessed.</div>
 
         <div className="space-y-1 text-[12px] max-w-[520px]">
           <Row k="System" />
@@ -208,7 +209,7 @@ export function ControlPanelWindow({ os, onClose, onNavigate, top = 40, left = 1
           {!path.length && (
             <div className="mb-4 rounded-[3px] border border-[#cfd8e6] bg-[#fbfdff] px-3 py-2 text-[12px] flex items-center gap-2">
               <span>ℹ️</span>
-              <span>Driver store contains {DRIVER_PACKAGES.length} packages · {warnCount > 0 ? `${warnCount} devices need driver software` : 'all devices have driver software'}.</span>
+              <span>Driver store contains {catalog().length} packages · {warnCount > 0 ? `${warnCount} devices need driver software` : 'all devices have driver software'}.</span>
             </div>
           )}
           <div className="grid grid-cols-2 gap-x-6">

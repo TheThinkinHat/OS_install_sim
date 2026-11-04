@@ -5,7 +5,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { DriverPackage, VDevice } from './types';
-import { DRIVER_PACKAGES } from './data';
+import { activeProfile, catalog } from './service';
 import { dateStamp, useDrivers } from './service';
 import { AeroProgress, SEGOE } from './ui';
 
@@ -112,7 +112,7 @@ function WindowsUpdatePage({ onAbout }: { onAbout: () => void }) {
     const mandatory: DriverPackage[] = [];
     const optionalDrivers: DriverPackage[] = [];
     const otherOptional: DriverPackage[] = [];
-    for (const p of DRIVER_PACKAGES) {
+    for (const p of catalog()) {
       if (!p.wu) continue;
       if (p.wu.kind === 'driver') {
         const dev = bestDeviceFor(p);
@@ -359,7 +359,7 @@ function RestartButtons() {
 
 function UpdateHistory() {
   const { updateHistory } = useDrivers();
-  const cats = ['Driver Updates', 'Quality Updates', 'Definition Updates', 'Other Updates'] as const;
+  const cats = ['Driver Updates', 'Quality Updates', '.NET Frameworks', 'Definition Updates', 'Other Updates'] as const;
   return (
     <div className="mb-4 border border-[#e1e1e1] max-w-[720px]">
       <div className="px-4 py-2 bg-[#f7fafd] text-[14px] font-medium border-b border-[#e1e1e1]">Update history</div>
@@ -392,10 +392,10 @@ function AboutPage({ onBack }: { onBack: () => void }) {
       <button onClick={onBack} className="mb-4 text-[12px]" style={{ color: ACCENT }}>← Back to Windows Update</button>
       <div className="text-[20px] font-light mb-4">About</div>
       <div className="grid grid-cols-[220px_1fr] gap-x-6 gap-y-2 max-w-[640px] text-[12px]">
-        <div className="text-[#666]">Edition</div><div>Windows 10 Pro</div>
-        <div className="text-[#666]">Version</div><div>22H2</div>
-        <div className="text-[#666]">Installed on</div><div>10/14/2022</div>
-        <div className="text-[#666]">OS build</div><div>19045.3803</div>
+        <div className="text-[#666]">Edition</div><div>{activeProfile().osName}</div>
+        <div className="text-[#666]">Version</div><div>{activeProfile().osVersionLabel.replace('Version ','')}</div>
+        <div className="text-[#666]">Installed on</div><div>{activeProfile().installDate}</div>
+        <div className="text-[#666]">OS build</div><div>{activeProfile().buildNumber}</div>
         <div className="text-[#666]">Experience</div><div>Windows Feature Experience Pack 120.2212.4190.0</div>
         <div className="text-[#666]">Processor</div><div>Intel(R) Core(TM) i7-9700K CPU @ 3.60GHz</div>
         <div className="text-[#666]">Installed RAM</div><div>16.0 GB (15.8 GB usable)</div>

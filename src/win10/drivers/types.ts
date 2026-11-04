@@ -127,7 +127,7 @@ export interface RestartRequest {
 /** Recorded entry for Settings ▸ Update & Security ▸ Windows Update ▸ View update history (§18) */
 export interface UpdateHistoryEntry {
   id: string;
-  category: 'Quality Updates' | 'Driver Updates' | 'Definition Updates' | 'Other Updates';
+  category: 'Quality Updates' | 'Driver Updates' | 'Definition Updates' | 'Other Updates' | '.NET Frameworks';
   name: string;
   date: string;
   result: 'Successful' | 'Failed';
