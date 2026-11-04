@@ -9,11 +9,13 @@ import { AeroWindow, ContextMenu, SEGOE } from './ui';
 import { catalog, useDrivers } from './service';
 import { InfInstallDialog } from './InfInstall';
 
-export function ExplorerWindow({ startPath = 'C:\\', onClose, onLaunchInstaller, top = 56, left = 200, z = 55 }: {
+export function ExplorerWindow({ startPath = 'C:\\', onClose, onLaunchInstaller, top = 56, left = 200, z = 55, bare }: {
   startPath?: string;
   onClose: () => void;
   onLaunchInstaller: (inst: ManufacturerInstaller) => void;
   top?: number; left?: number; z?: number;
+  /** Render without the Aero frame — used by the Windows 11 Mica chrome wrapper. */
+  bare?: boolean;
 }) {
   const [path, setPath] = useState(startPath);
   const [history, setHistory] = useState<string[]>([startPath]);
@@ -60,8 +62,8 @@ export function ExplorerWindow({ startPath = 'C:\\', onClose, onLaunchInstaller,
     setMenu({ x: e.clientX, y: e.clientY, pkg, fileName: name });
   };
 
-  return (
-    <AeroWindow title="Computer" icon="🗂️" onClose={onClose} width={720} height={480} initialTop={top} initialLeft={left} zIndex={z} resizable>
+  const body = (
+    <>
       {/* Address bar */}
       <div className="shrink-0 flex items-center gap-1 px-2 py-[5px]" style={{ background: 'linear-gradient(180deg,#fdfdfd,#eef2f8)', borderBottom: '1px solid #d3dcea' }}>
         <NavBtn label="←" onClick={back} disabled={histIdx === 0} />
@@ -149,6 +151,13 @@ export function ExplorerWindow({ startPath = 'C:\\', onClose, onLaunchInstaller,
         <InfInstallDialog pkg={infInstall.pkg} fileName={infInstall.fileName} folder={path} z={(zRef.current += 5)}
           onClose={() => setInfInstall(null)} />
       )}
+    </>
+  );
+
+  if (bare) return <div style={{ width: 720, height: 442, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>{body}</div>;
+  return (
+    <AeroWindow title="Computer" icon="🗂️" onClose={onClose} width={720} height={480} initialTop={top} initialLeft={left} zIndex={z} resizable>
+      {body}
     </AeroWindow>
   );
 }
