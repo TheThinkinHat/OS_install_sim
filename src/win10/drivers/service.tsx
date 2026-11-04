@@ -17,17 +17,6 @@ import {
 // Components that use the driver service run exclusively inside a
 // DriverProvider; the provider sets this mirror on mount. The default keeps
 // the original Windows 10 behavior byte-for-byte when no profile is injected.
-let ACTIVE_PROFILE: ProfileConfig = WIN10_PROFILE;
-export function setActiveProfile(p: ProfileConfig) { ACTIVE_PROFILE = p; }
-export function activeProfile(): ProfileConfig { return ACTIVE_PROFILE; }
-/** Catalog remapped for the active OS profile (identity on Win10). */
-export function catalog(): DriverPackage[] {
-  return ACTIVE_PROFILE.key === 'win10' ? DRIVER_PACKAGES : DRIVER_PACKAGES.map((p) => localizePkg(p, ACTIVE_PROFILE));
-}
-export function pkgInCatalog(id: string): DriverPackage | undefined {
-  return catalog().find((p) => p.id === id);
-}
-
 export interface InstallOutcome {
   success: boolean;
   message?: string;
@@ -72,6 +61,17 @@ export const WIN10_PROFILE: ProfileConfig = {
 };
 
 const DEFAULT_PROFILE: ProfileConfig = WIN10_PROFILE;
+
+let ACTIVE_PROFILE: ProfileConfig = WIN10_PROFILE;
+export function setActiveProfile(p: ProfileConfig) { ACTIVE_PROFILE = p; }
+export function activeProfile(): ProfileConfig { return ACTIVE_PROFILE; }
+/** Catalog remapped for the active OS profile (identity on Win10). */
+export function catalog(): DriverPackage[] {
+  return ACTIVE_PROFILE.key === 'win10' ? DRIVER_PACKAGES : DRIVER_PACKAGES.map((p) => localizePkg(p, ACTIVE_PROFILE));
+}
+export function pkgInCatalog(id: string): DriverPackage | undefined {
+  return catalog().find((p) => p.id === id);
+}
 
 /** Remap OS-specific catalog strings for the given Windows version. */
 export function localizePkgFor(p: DriverPackage, winVer: '10' | '11'): DriverPackage {
