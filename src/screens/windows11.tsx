@@ -164,7 +164,9 @@ export function Win11Desktop({ userName, computerName, onRestart, officeInstalle
   const [showWidgets, setShowWidgets] = useState(false);
   const [startSearch, setStartSearch] = useState('');
   const [powerMenu, setPowerMenu] = useState(false);
-  const [taskCtx, setTaskCtx] = useState({ x: 0, y: 0 } | null>(null);
+  const [qsOpen, setQsOpen] = useState(false);
+  const hasDrivers = !!driverEntries;
+  const [taskCtx, setTaskCtx] = useState<{ x: number; y: number } | null>(null);
 
   const openOfficeApp = (appName: OfficeAppName) => {
     if (!openApps.includes(appName)) setOpenApps([...openApps, appName]);
