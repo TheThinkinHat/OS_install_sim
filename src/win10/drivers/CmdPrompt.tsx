@@ -4,7 +4,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { VDevice } from './types';
-import { OS_BUILD, OS_NAME, SYSTEM_ARCH, packageForInfFile } from './data';
+import { SYSTEM_ARCH, packageForInfFile } from './data';
 import { activeFilesystem, catalog, fsListFolder as listFolder } from './service';
 import { classNameOf, evaluateSignature, useDrivers, validateDriverPackage } from './service';
 import { SEGOE } from './ui';
@@ -15,6 +15,7 @@ interface CmdCtx {
   applyPackage: ReturnType<typeof useDrivers>['applyPackage'];
   addToStore: ReturnType<typeof useDrivers>['addToStore'];
   requestRestart: ReturnType<typeof useDrivers>['requestRestart'];
+  profile: ReturnType<typeof useDrivers>['profile'];
 }
 
 function findTarget(pkgId: string, devices: VDevice[]): VDevice | undefined {
@@ -174,11 +175,12 @@ function runCommand(raw: string, ctx: CmdCtx): string[] {
     return out;
   }
 
-  if (key === 'ver') { out.push('', `Microsoft Windows [Version 10.0.${OS_BUILD.split(', ')[1]?.replace('build ', '') ?? '19045.3803'}]`, ''); return out; }
+  if (key === 'ver') { out.push('', `Microsoft Windows [Version 10.0.${ctx.profile.buildNumber}]`, ''); return out; }
   if (key === 'whoami') { out.push('user-pc\\user'); return out; }
   if (key === 'hostname') { out.push('USER-PC'); return out; }
   if (key === 'systeminfo') {
-    out.push('', `Host Name:                 USER-PC`, `OS Name:                   ${OS_NAME}`, `OS Version:                10.0.${OS_BUILD.split(',')[1]?.trim().replace('build ', '').split('.')[0] ?? '19045'} Build ${OS_BUILD.split(',')[1]?.trim().replace('build ', '') ?? '19045.3803'}`, `OS Architecture:           ${SYSTEM_ARCH}-bit`, `BIOS Version:              American Megatrends Inc. 5.14`, `Processor(s):              1 Intel Core i7-9700K @ 3.60GHz`, `Total Physical Memory:     16,384 MB`, '');
+    const bn = ctx.profile.buildNumber; // e.g. 19045.3803 or 26100.2605
+    out.push('', `Host Name:                 USER-PC`, `OS Name:                   ${ctx.profile.osName}`, `OS Version:                10.0.${bn.split('.')[0]} Build ${bn}`, `OS Architecture:           ${SYSTEM_ARCH}-bit`, `BIOS Version:              American Megatrends Inc. 5.14`, `Processor(s):              1 Intel Core i7-9700K @ 3.60GHz`, `Total Physical Memory:     16,384 MB`, '');
     return out;
   }
   if (key === 'cls') { return ['__CLS__']; }
@@ -192,13 +194,14 @@ function runCommand(raw: string, ctx: CmdCtx): string[] {
   return out;
 }
 
-export function CmdWindow({ onClose, top = 80, left = 120, z = 90 }: { onClose: () => void; top?: number; left?: number; z?: number }) {
-  const { devices, store, applyPackage, addToStore, requestRestart } = useDrivers();
-  const ctxRef = useRef<CmdCtx>({ devices, store, applyPackage, addToStore, requestRestart });
-  ctxRef.current = { devices, store, applyPackage, addToStore, requestRestart };
+export function CmdWindow({ onClose, top = 80, left = 120, z = 90, bare }: { onClose: () => void; top?: number; left?: number; z?: number; bare?: boolean }) {
+  const { devices, store, applyPackage, addToStore, requestRestart, profile } = useDrivers();
+  const ctxRef = useRef<CmdCtx>({ devices, store, applyPackage, addToStore, requestRestart, profile });
+  ctxRef.current = { devices, store, applyPackage, addToStore, requestRestart, profile };
 
+  const buildStr = profile.buildNumber; // profile-aware (26100.2605 on Win11, 19045.3803 on Win10)
   const [lines, setLines] = useState<string[]>([
-    `Microsoft Windows [Version 10.0.${OS_BUILD.split(', ')[1]?.replace('build ', '') ?? '19045.3803'}]`,
+    `Microsoft Windows [Version 10.0.${buildStr}]`,
     '(c) Microsoft Corporation. All rights reserved.',
     '',
     'This is a SIMULATED command prompt. It only manages the virtual driver',
@@ -225,12 +228,7 @@ export function CmdWindow({ onClose, top = 80, left = 120, z = 90 }: { onClose: 
     setHistIdx(-1); setInput('');
   };
 
-  return (
-    <div className="absolute flex flex-col" style={{ top, left, width: 780, height: 460, zIndex: z, background: '#0c0c0c', border: '1px solid #666', boxShadow: '0 10px 30px rgba(0,0,0,.5)' }} onMouseDown={() => inputRef.current?.focus()}>
-      <div className="flex items-center justify-between h-[28px] px-2 shrink-0 select-none" style={{ background: 'linear-gradient(180deg,#e8e8e8,#cfcfcf)', borderBottom: '1px solid #999' }}>
-        <span className="text-[12px] text-[#222]" style={SEGOE}>⬛ C:\Windows\System32\cmd.exe — Simulated</span>
-        <button onClick={onClose} className="w-[30px] h-[20px] rounded-[3px] text-[11px] font-bold text-white hover:brightness-110" style={{ background: '#c8403a', border: '1px solid #8f201c' }}>✕</button>
-      </div>
+  const body = (<>
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-2 py-1 font-mono text-[12px] leading-[17px] text-[#cccccc] whitespace-pre-wrap" style={{ fontFamily: 'Consolas, "Courier New", monospace' }}>
         {lines.map((l, i) => <div key={i}>{l || '\u00A0'}</div>)}
         <div className="flex">
@@ -245,6 +243,16 @@ export function CmdWindow({ onClose, top = 80, left = 120, z = 90 }: { onClose: 
             className="flex-1 bg-transparent outline-none text-[#eee] ml-1 font-mono text-[12px]" />
         </div>
       </div>
+    </>);
+
+  if (bare) return <div style={{ width: 780, height: 420, display: 'flex', flexDirection: 'column', background: '#0c0c0c' }}>{body}</div>;
+  return (
+    <div className="absolute flex flex-col" style={{ top, left, width: 780, height: 460, zIndex: z, background: '#0c0c0c', border: '1px solid #666', boxShadow: '0 10px 30px rgba(0,0,0,.5)' }} onMouseDown={() => inputRef.current?.focus()}>
+      <div className="flex items-center justify-between h-[28px] px-2 shrink-0 select-none" style={{ background: 'linear-gradient(180deg,#e8e8e8,#cfcfcf)', borderBottom: '1px solid #999' }}>
+        <span className="text-[12px] text-[#222]" style={SEGOE}>⬛ C:\Windows\System32\cmd.exe — Simulated</span>
+        <button onClick={onClose} className="w-[30px] h-[20px] rounded-[3px] text-[11px] font-bold text-white hover:brightness-110" style={{ background: '#c8403a', border: '1px solid #8f201c' }}>✕</button>
+      </div>
+      {body}
     </div>
   );
 }

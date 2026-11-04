@@ -154,19 +154,38 @@ export function Win11Install({ onComplete, onBack }) {
 
 // Windows 11 Desktop
 // Windows 11 Desktop
-export function Win11Desktop({ userName, computerName, onRestart, officeInstalled, officeVersion, onInstallOffice }) {
+export function Win11Desktop({ userName, computerName, onRestart, officeInstalled, officeVersion, onInstallOffice, driverEntries }) {
+  const de = driverEntries || {};
   const [showStartMenu, setShowStartMenu] = useState(false);
   const [showFileManager, setShowFileManager] = useState(false);
   const [showWelcome, setShowWelcome] = useState(true);
   const [openApps, setOpenApps] = useState<OfficeAppName[]>([]);
   const [activeApp, setActiveApp] = useState<OfficeAppName | null>(null);
   const [showWidgets, setShowWidgets] = useState(false);
+  const [startSearch, setStartSearch] = useState('');
+  const [powerMenu, setPowerMenu] = useState(false);
+  const [qsOpen, setQsOpen] = useState(false);
+  const hasDrivers = !!driverEntries;
+  const [taskCtx, setTaskCtx] = useState<{ x: number; y: number } | null>(null);
 
   const openOfficeApp = (appName: OfficeAppName) => {
     if (!openApps.includes(appName)) setOpenApps([...openApps, appName]);
     setActiveApp(appName);
     setShowStartMenu(false);
   };
+
+  // Windows Search results across system tools + installed Office apps.
+  const SEARCH_INDEX = [
+    { label: 'Device Manager', icon: '🖥️', run: () => de.openDeviceManager?.(), hint: 'System' },
+    { label: 'Settings', icon: '⚙️', run: () => de.openSettings?.('update'), hint: 'Windows Update, drivers, optional updates' },
+    { label: 'File Explorer', icon: '📁', run: () => de.openExplorer?.('C:\\'), hint: 'App' },
+    { label: 'Windows Terminal', icon: '⬛', run: () => de.openCmd?.(), hint: 'pnputil, systeminfo' },
+    { label: 'Control Panel', icon: '🎛️', run: () => de.openControlPanel?.(), hint: 'System and Security' },
+    { label: 'System Information', icon: 'ℹ️', run: () => de.openComputerProperties?.(), hint: 'About this PC' },
+    ...(officeInstalled ? ['Word', 'Excel'].map((a) => ({ label: a, icon: a === 'Word' ? '📝' : '📊', run: () => openOfficeApp(a), hint: 'App' })) : []),
+  ];
+  const q = startSearch.trim().toLowerCase();
+  const searchResults = q ? SEARCH_INDEX.filter((r) => r.label.toLowerCase().includes(q)).slice(0, 6) : [];
 
   return (
     <div className="w-full h-full flex flex-col relative overflow-hidden select-none">
@@ -234,23 +253,44 @@ export function Win11Desktop({ userName, computerName, onRestart, officeInstalle
       )}
 
       {showStartMenu && (
-        <div className="absolute bottom-12 left-1/2 transform -translate-x-1/2 w-[600px] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 z-50 overflow-hidden">
+        <div className="absolute bottom-12 left-1/2 transform -translate-x-1/2 w-[600px] max-h-[70vh] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/20 z-50 overflow-y-auto">
           <div className="p-6">
             <div className="mb-4">
-              <input type="text" placeholder="Search for apps, settings, and documents" className="w-full px-4 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <input autoFocus type="text" value={startSearch} onChange={(e) => setStartSearch(e.target.value)} placeholder="Search for apps, settings, and documents" className="w-full px-4 py-2 bg-gray-100 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
+            {searchResults.length > 0 && (
+              <div className="mb-4">
+                <div className="text-gray-700 text-sm font-semibold mb-2">Best match</div>
+                <div className="space-y-1">
+                  {searchResults.map((r) => (
+                    <div key={r.label} onClick={() => { r.run(); setShowStartMenu(false); setStartSearch(''); }} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-100 cursor-pointer">
+                      <div className="w-8 h-8 bg-gray-200 rounded-lg flex items-center justify-center"><span className="text-sm">{r.icon}</span></div>
+                      <div className="flex-1"><div className="text-gray-700 text-xs">{r.label}</div><div className="text-gray-500 text-[10px]">{r.hint}</div></div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="mb-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-gray-700 text-sm font-semibold">Pinned</span>
                 <button className="text-blue-500 text-xs hover:underline">All apps &gt;</button>
               </div>
               <div className="grid grid-cols-6 gap-3">
-                {['Edge', 'Mail', 'Calendar', 'Store', 'Photos', 'Settings'].map(app => (
-                  <div key={app} className="flex flex-col items-center p-2 rounded-lg hover:bg-gray-100 cursor-pointer">
+                {[
+                  { name: 'Edge', icon: '🌐' }, { name: 'Mail', icon: '📧' }, { name: 'Calendar', icon: '📅' },
+                  { name: 'Store', icon: '🛍️' }, { name: 'Photos', icon: '📷' },
+                  { name: 'Terminal', icon: '⬛', run: () => de.openCmd?.() },
+                  { name: 'File Explorer', icon: '📁', run: () => de.openExplorer?.('C:\\') },
+                  { name: 'Control Panel', icon: '🎛️', run: () => de.openControlPanel?.() },
+                  { name: 'Device Manager', icon: '🖥️', run: () => de.openDeviceManager?.() },
+                  { name: 'Settings', icon: '⚙️', run: () => de.openSettings?.('update') },
+                ].map(app => (
+                  <div key={app.name} onClick={() => { if (app.run) { app.run(); setShowStartMenu(false); } }} className="flex flex-col items-center p-2 rounded-lg hover:bg-gray-100 cursor-pointer">
                     <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-lg flex items-center justify-center mb-1">
-                      <span className="text-xl text-white">{app === 'Edge' ? '🌐' : app === 'Mail' ? '📧' : app === 'Calendar' ? '📅' : app === 'Store' ? '🛍️' : app === 'Photos' ? '📷' : '⚙️'}</span>
+                      <span className="text-xl text-white">{app.icon}</span>
                     </div>
-                    <span className="text-gray-700 text-[10px]">{app}</span>
+                    <span className="text-gray-700 text-[10px]">{app.name}</span>
                   </div>
                 ))}
               </div>
@@ -285,15 +325,41 @@ export function Win11Desktop({ userName, computerName, onRestart, officeInstalle
               <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center"><span className="text-white text-sm font-bold">{userName.charAt(0).toUpperCase()}</span></div>
               <span className="text-gray-700 text-sm">{userName}</span>
             </div>
-            <button onClick={onRestart} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs rounded-lg">⏻ Power</button>
+            <div className="relative">
+              <button onClick={() => setPowerMenu(!powerMenu)} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs rounded-lg">⏻ Power</button>
+              {powerMenu && (
+                <div className="absolute bottom-full right-0 mb-2 w-44 bg-white/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-200 py-1 z-10">
+                  <div onClick={() => { setPowerMenu(false); if (de.onRestart) de.onRestart(); else onRestart(); }} className="px-3 py-2 text-xs text-gray-700 hover:bg-gray-100 cursor-pointer flex items-center gap-2"><span>🔄</span> Restart</div>
+                  <div onClick={() => { setPowerMenu(false); setShowStartMenu(false); onRestart(); }} className="px-3 py-2 text-xs text-gray-700 hover:bg-gray-100 cursor-pointer flex items-center gap-2"><span>⏻</span> Shut down</div>
+                </div>
+              )}
+            </div>
           </div>
+        </div>
+      )}
+
+      {/* Windows 11 Quick Link (Win+X) menu — right-click Start */}
+      {taskCtx && de.openDeviceManager && (
+        <div className="fixed z-[60] w-60 bg-white/95 backdrop-blur-xl rounded-xl shadow-2xl border border-gray-200 py-1.5 text-[12px] text-gray-800" style={{ left: Math.min(taskCtx.x, window.innerWidth - 260), top: Math.max(taskCtx.y - 260, 8) }} onClick={(e) => e.stopPropagation()}>
+          {[
+            { label: 'Device Manager', icon: '🖥️', run: () => de.openDeviceManager() },
+            { label: 'Settings', icon: '⚙️', run: () => de.openSettings?.('update') },
+            { label: 'File Explorer', icon: '📁', run: () => de.openExplorer?.('C:\\') },
+            { label: 'Terminal', icon: '⬛', run: () => de.openCmd?.() },
+            { label: 'Control Panel', icon: '🎛️', run: () => de.openControlPanel?.() },
+            { label: 'System (About)', icon: 'ℹ️', run: () => de.openComputerProperties?.() },
+          ].map((it) => (
+            <div key={it.label} onClick={() => { it.run(); setTaskCtx(null); }} className="px-3 py-1.5 hover:bg-gray-100 cursor-pointer flex items-center gap-2">{it.icon}<span>{it.label}</span></div>
+          ))}
+          <div className="border-t border-gray-200 my-1" />
+          <div onClick={() => { setTaskCtx(null); if (de.onRestart) de.onRestart(); else onRestart(); }} className="px-3 py-1.5 hover:bg-gray-100 cursor-pointer flex items-center gap-2">⏻<span>Shut down or sign out</span></div>
         </div>
       )}
 
       <div className="absolute bottom-0 left-0 right-0 h-12 bg-white/80 backdrop-blur-xl border-t border-white/20 flex items-center justify-center px-4 z-40 rounded-t-xl">
         <div className="flex items-center gap-2">
           <button onClick={() => setShowWidgets(!showWidgets)} className="w-10 h-10 flex items-center justify-center hover:bg-white/50 rounded-lg"><span className="text-xl">📰</span></button>
-          <button onClick={() => setShowStartMenu(!showStartMenu)} className={`w-10 h-10 flex items-center justify-center hover:bg-white/50 rounded-lg ${showStartMenu ? 'bg-white/50' : ''}`}>
+          <button onClick={() => setShowStartMenu(!showStartMenu)} onContextMenu={(e) => { e.preventDefault(); setShowStartMenu(false); setTaskCtx({ x: e.clientX, y: e.clientY }); }} className={`w-10 h-10 flex items-center justify-center hover:bg-white/50 rounded-lg ${showStartMenu ? 'bg-white/50' : ''}`}>
             <div className="grid grid-cols-2 gap-[2px] w-5 h-5">
               <div className="bg-blue-500 rounded-[1px]"></div>
               <div className="bg-blue-500 rounded-[1px]"></div>
@@ -301,17 +367,44 @@ export function Win11Desktop({ userName, computerName, onRestart, officeInstalle
               <div className="bg-blue-500 rounded-[1px]"></div>
             </div>
           </button>
-          <button className="w-10 h-10 flex items-center justify-center hover:bg-white/50 rounded-lg"><span className="text-xl">🔍</span></button>
+          <button onClick={() => setShowStartMenu(!showStartMenu)} className="w-10 h-10 flex items-center justify-center hover:bg-white/50 rounded-lg"><span className="text-xl">🔍</span></button>
           <button className="w-10 h-10 flex items-center justify-center hover:bg-white/50 rounded-lg"><span className="text-xl">💬</span></button>
-          {showFileManager && <button onClick={() => setShowFileManager(!showFileManager)} className="w-10 h-10 flex items-center justify-center hover:bg-white/50 rounded-lg bg-white/50"><span className="text-xl">📁</span></button>}
+          {de.openExplorer && <button onClick={() => de.openExplorer('C:\\')} className="w-10 h-10 flex items-center justify-center hover:bg-white/50 rounded-lg"><span className="text-xl">📁</span></button>}
+          {showFileManager && <button onClick={() => setShowFileManager(!showFileManager)} className="w-10 h-10 flex items-center justify-center hover:bg-white/50 rounded-lg bg-white/50"><span className="text-xl">🗂️</span></button>}
           {openApps.map(appName => <button key={appName} onClick={() => setActiveApp(appName)} className={`w-10 h-10 flex items-center justify-center hover:bg-white/50 rounded-lg ${activeApp === appName ? 'bg-white/50' : ''}`}><span className="text-xl">{appName === 'Word' ? '📝' : appName === 'Excel' ? '📊' : '📽️'}</span></button>)}
         </div>
-        <div className="absolute right-4 flex items-center gap-2 text-gray-700 text-xs">
+        <div onClick={() => { if (de.openActionCenter) de.openActionCenter(); else setQsOpen((v: boolean) => !v); }} className={`absolute right-4 flex items-center gap-2 text-gray-700 text-xs px-2 py-1 rounded ${de.openActionCenter || hasDrivers ? 'cursor-pointer hover:bg-white/50' : ''}`}>
           <span>🔊</span>
           <span>📶</span>
+          {de.restartPending && <span title="Restart required" className="text-orange-600 font-bold">⟳</span>}
           <span>{new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}</span>
         </div>
       </div>
+
+      {/* Windows 11 Quick Settings flyout when no dedicated Action Center window is wired */}
+      {qsOpen && !de.openActionCenter && (
+        <>
+          <div className="fixed inset-0 z-[95]" onClick={() => setQsOpen(false)} />
+          <div className="absolute bottom-14 right-3 w-[320px] bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-gray-200 z-[96] p-3">
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              {[{ icon: '📶', label: 'Wi-Fi', sub: 'SIM-Home-5G' }, { icon: '🔵', label: 'Bluetooth', sub: 'On' }, { icon: '✈️', label: 'Airplane mode', sub: 'Off' }].map((t) => (
+                <div key={t.label} className="rounded-xl bg-gray-100 p-2.5 cursor-default">
+                  <div className="text-[16px]">{t.icon}</div>
+                  <div className="text-[11px] font-medium text-gray-800 mt-1">{t.label}</div>
+                  <div className="text-[10px] text-gray-500">{t.sub}</div>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 px-1">
+              <span className="text-[13px]">🔊</span>
+              <div className="flex-1 h-1 rounded-full bg-gray-300"><div className="h-1 w-2/3 rounded-full bg-blue-500" /></div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* click-away dismiss for quick-link menu */}
+      {taskCtx && <div className="fixed inset-0 z-[59]" onClick={() => setTaskCtx(null)} onContextMenu={() => setTaskCtx(null)} />}
     </div>
   );
 }

@@ -5,7 +5,8 @@ import { Win7Desktop as Win7DriversDesktop } from './win7/Win7Drivers';
 import { UbuntuBIOS, UbuntuInstall, UbuntuDesktop } from './screens/ubuntu.tsx';
 import { Win10BIOS, Win10Install } from './screens/windows10.tsx';
 import { Win10DriversDesktop } from './win10/Win10Drivers';
-import { Win11BIOS, Win11Install, Win11Desktop } from './screens/windows11.tsx';
+import { Win11BIOS, Win11Install } from './screens/windows11.tsx';
+import { Win11DriversDesktop } from './win11/Win11Drivers';
 import { MacBootScreen, MacUtilitiesScreen, MacInstallScreens, MacSetupAssistant, MacDesktop } from './screens/macos.tsx';
 import { OfficeSetup, OfficeInstalling, OfficeComplete } from './shared/office.tsx';
 
@@ -98,10 +99,10 @@ export default function App() {
         {screen === 'bios' && <Win11BIOS onExit={() => setScreen('install')} onBack={handleBackToLanding} />}
         {screen === 'install' && <Win11Install onComplete={(name: string, comp: string) => { setUserName(name); setComputerName(comp); setScreen('desktop'); }} onBack={() => setScreen('bios')} />}
         {screen === 'desktop' && (
-          <Win11Desktop
+          <Win11DriversDesktop
             userName={userName}
             computerName={computerName}
-            onRestart={handleBackToLanding}
+            onShutdown={handleBackToLanding}
             officeInstalled={officeInstalled}
             officeVersion={officeVersion}
             onInstallOffice={() => setOfficePhase('setup')}
