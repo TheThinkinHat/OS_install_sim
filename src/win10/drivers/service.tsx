@@ -9,8 +9,8 @@ import type {
   VDevice, DriverPackage, StoredDriverPackage, RestartRequest, UpdateHistoryEntry, DeviceEventRec,
 } from './types';
 import {
-  DRIVER_PACKAGES, SYSTEM_ARCH, OS_NAME, OS_VERSION_LABEL, OS_BUILD, OS_INSTALL_DATE,
-  createInitialDevices, initialStoredPackages, hiddenDevicesForScan,
+  DRIVER_PACKAGES, DRIVER_FILESYSTEM, listFolder, SYSTEM_ARCH, OS_NAME, OS_VERSION_LABEL, OS_BUILD, OS_INSTALL_DATE,
+  createInitialDevices, initialStoredPackages, hiddenDevicesForScan, DEVICE_CATEGORIES,
 } from './data';
 
 // ── Active profile (module-level mirror for non-hook call sites) ────────────
@@ -46,6 +46,14 @@ export interface ProfileConfig {
   cumulativeKB: string;
   dotnetKB: string;
   seedHistory?: Omit<UpdateHistoryEntry, 'id'>[];
+  /** Device Manager category order (defaults to the Win10 set). */
+  categories?: string[];
+  /** Per-OS virtual driver filesystem (defaults to the Win10 tree). */
+  filesystem?: Record<string, import('./data').FsNode[]>;
+  /** Inbox-driver version prefix, e.g. "10.0.26100" for Windows 11 24H2. */
+  inboxVersionPrefix?: string;
+  /** Profile-only driver packages appended to the localized base catalog. */
+  extraPackages?: DriverPackage[];
 }
 
 export const WIN10_PROFILE: ProfileConfig = {
@@ -67,7 +75,20 @@ export function setActiveProfile(p: ProfileConfig) { ACTIVE_PROFILE = p; }
 export function activeProfile(): ProfileConfig { return ACTIVE_PROFILE; }
 /** Catalog remapped for the active OS profile (identity on Win10). */
 export function catalog(): DriverPackage[] {
-  return ACTIVE_PROFILE.key === 'win10' ? DRIVER_PACKAGES : DRIVER_PACKAGES.map((p) => localizePkg(p, ACTIVE_PROFILE));
+  if (ACTIVE_PROFILE.key === 'win10') return DRIVER_PACKAGES;
+  return [...DRIVER_PACKAGES.map((p) => localizePkg(p, ACTIVE_PROFILE)), ...(ACTIVE_PROFILE.extraPackages ?? [])];
+}
+/** Virtual driver filesystem for the active OS profile (Win11 adds Downloads packages). */
+export function activeFilesystem(): Record<string, import('./data').FsNode[]> {
+  return ACTIVE_PROFILE.filesystem ?? DRIVER_FILESYSTEM;
+}
+/** Profile-aware folder listing (identity on Windows 10). */
+export function fsListFolder(path: string): import('./data').FsNode[] {
+  return listFolder(path, activeFilesystem());
+}
+/** Device Manager category order for the active profile. */
+export function activeCategories(): string[] {
+  return ACTIVE_PROFILE.categories ?? DEVICE_CATEGORIES;
 }
 export function pkgInCatalog(id: string): DriverPackage | undefined {
   return catalog().find((p) => p.id === id);
@@ -109,6 +130,8 @@ function localizePkg(p: DriverPackage, prof: ProfileConfig): DriverPackage {
     osSupport: p.osSupport.map((o) => o === 'Windows 10' ? `Windows ${prof.winVer}` : o),
     wu: p.wu ? { ...p.wu, title: s(p.wu.title) } : undefined,
     note: p.note ? s(p.note) : undefined,
+    // Inbox drivers carry the OS build number — remap them under Win11.
+    version: prof.inboxVersionPrefix ? p.version.replace(/^10\.0\.\d+/, prof.inboxVersionPrefix) : p.version,
   };
 }
 
@@ -168,7 +191,7 @@ export function classNameOf(pkg: DriverPackage): string {
 // ── Compatibility validation (§9.2 / §10 / §21) ──────────────────────────────
 export function validateDriverPackage(dev: VDevice, packageId: string): { ok: boolean; reason?: string } {
   const prof = ACTIVE_PROFILE;
-  const pkg = (prof.key === 'win10' ? DRIVER_PACKAGES : DRIVER_PACKAGES.map((p) => localizePkg(p, prof))).find((p) => p.id === packageId);
+  const pkg = catalog().find((p) => p.id === packageId);
   if (!pkg) return { ok: false, reason: 'The specified driver package could not be found in the driver catalog.' };
   const hasInf = pkg.files.some((f) => f.toLowerCase().endsWith('.inf'));
   if (!hasInf) return { ok: false, reason: `The driver package "${pkg.files[0] ?? packageId}" is invalid: no setup information file (.inf) was found.` };
@@ -285,7 +308,7 @@ export function DriverProvider({ children, profile }: { children: React.ReactNod
   const prof = profile ?? DEFAULT_PROFILE;
   setActiveProfile(prof); // module-level mirror for non-hook helpers & portals
   const persisted = useMemo(() => loadPersisted(prof), [prof]);
-  const [devices, setDevices] = useState<VDevice[]>(persisted?.devices ?? createInitialDevices());
+  const [devices, setDevices] = useState<VDevice[]>(persisted?.devices ?? createInitialDevices(prof.key === 'win11' ? 'win11' : 'win10'));
   const [store, setStore] = useState<StoredDriverPackage[]>(persisted?.store ?? initialStoredPackages());
   const [updateHistory, setUpdateHistory] = useState<UpdateHistoryEntry[]>(persisted?.history ?? (prof.seedHistory ? prof.seedHistory.map((h, i) => ({ ...h, id: `h-seed-${i}` })) : DEFAULT_HISTORY));
   const [pendingRestart, setPendingRestart] = useState<RestartRequest | null>(persisted?.pendingRestart ?? null);
@@ -328,7 +351,7 @@ export function DriverProvider({ children, profile }: { children: React.ReactNod
   /** Central installation pipeline (§10). Every UI path funnels through here. */
   const applyPackage = useCallback((deviceId: string, packageId: string, opts?: { source?: InstallSource; forceUnsigned?: boolean }): InstallOutcome => {
     const dev = devices.find((d) => d.id === deviceId);
-    const pkg = DRIVER_PACKAGES.find((p) => p.id === packageId);
+    const pkg = pkgInCatalog(packageId);
     if (!dev) return { success: false, message: 'The target device is no longer present in the system.' };
     if (!pkg) return { success: false, message: 'The specified driver package could not be found.' };
 
@@ -381,7 +404,7 @@ export function DriverProvider({ children, profile }: { children: React.ReactNod
     if (!dev.previousDrivers.length || !dev.driver) return { ok: false, message: 'No previous driver software exists for this device.' };
     const prev = dev.previousDrivers[0];
     const prevPkgId = dev.previousPackageIds[0];
-    const prevPkg = DRIVER_PACKAGES.find((p) => p.id === prevPkgId);
+    const prevPkg = pkgInCatalog(prevPkgId);
     setDevices((prevList) => prevList.map((d) => {
       if (d.id !== deviceId || !d.driver) return d;
       let nd: VDevice = {
@@ -414,7 +437,7 @@ export function DriverProvider({ children, profile }: { children: React.ReactNod
       return nd;
     }));
     if (deleteDriverSoftware && pkgId) {
-      const infName = DRIVER_PACKAGES.find((p) => p.id === pkgId)?.files.find((f) => f.toLowerCase().endsWith('.inf'));
+      const infName = pkgInCatalog(pkgId)?.files.find((f) => f.toLowerCase().endsWith('.inf'));
       if (infName) setStore((prev) => prev.filter((s) => !(s.originalInf.toLowerCase() === infName.toLowerCase() && s.devicesInstalledOn.every((x) => x === deviceId))));
     }
   }, [devices]);
@@ -441,7 +464,7 @@ export function DriverProvider({ children, profile }: { children: React.ReactNod
       const next = [...prev];
       if (!scannedRef.current) {
         scannedRef.current = true;
-        for (const hd of hiddenDevicesForScan()) {
+        for (const hd of hiddenDevicesForScan(prof.key === 'win11' ? 'win11' : 'win10')) {
           if (!next.some((d) => d.id === hd.id)) {
             found.push(hd);
             next.push({ ...hd, events: [{ kind: 'configured', date: nowStamp(), text: 'New hardware detected during a hardware change scan.' }] });
@@ -475,14 +498,15 @@ export function DriverProvider({ children, profile }: { children: React.ReactNod
 
   const resetAll = useCallback(() => {
     try { localStorage.removeItem(lsKeyFor(prof)); } catch { /* ignore */ }
-    setDevices(createInitialDevices());
+    setDevices(createInitialDevices(prof.key === 'win11' ? 'win11' : 'win10'));
     setStore(initialStoredPackages());
-    setUpdateHistory(DEFAULT_HISTORY);
+    setUpdateHistory(prof.seedHistory ? prof.seedHistory.map((h, i) => ({ ...h, id: `h-seed-${i}` })) : DEFAULT_HISTORY);
     setPendingRestart(null);
     setWuInstalledIds([]);
     nextOemRef.current = 4;
     scannedRef.current = false;
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prof]);
 
   const value = useMemo<DriverCtx>(() => ({
     devices, store, updateHistory, pendingRestart, wuInstalledIds, signingEnforcement, profile: prof,

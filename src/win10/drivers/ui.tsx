@@ -1,7 +1,17 @@
 // ── Windows 10 visual primitives for the classic driver-management dialogs ───
 
 import type { CSSProperties, ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
+
+// ── Windows 11 visual skin ───────────────────────────────────────────────────
+// When Win11Ui is mounted, AeroWindow renders with Mica-like rounded surfaces
+// and flat caption buttons, and ContextMenu uses the Win11 rounded style.
+// The classic Win10/Win7 look is untouched when this context is not provided.
+export const Win11UiCtx = createContext(false);
+
+export function Win11Ui({ children }: { children: ReactNode }) {
+  return <Win11UiCtx.Provider value={true}>{children}</Win11UiCtx.Provider>;
+}
 
 export const SEGOE: CSSProperties = { fontFamily: "'Segoe UI', 'Segoe UI Variable Text', Tahoma, Geneva, Verdana, sans-serif" };
 export const ACCENT = '#0078d7';
@@ -16,6 +26,7 @@ export function AeroWindow({ title, icon, onClose, onMinimize, width = 640, heig
   const [pos, setPos] = useState({ top: initialTop, left: initialLeft });
   const [minimized, setMinimized] = useState(false);
   const dragRef = useState<{ dx: number; dy: number } | null>(null);
+  const win11 = useContext(Win11UiCtx);
 
   const startDrag = (e: React.MouseEvent) => {
     if (!resizable) return;
@@ -35,30 +46,42 @@ export function AeroWindow({ title, icon, onClose, onMinimize, width = 640, heig
       style={{
         ...SEGOE,
         top: pos.top, left: pos.left, width, height, zIndex, display: minimized ? 'none' : 'flex',
-        background: '#f0f0f0',
-        border: '1px solid rgba(60,92,140,0.85)',
-        borderRadius: 8,
-        boxShadow: '0 0 0 1px rgba(255,255,255,0.35) inset, 0 10px 34px rgba(0,0,0,0.55), 0 0 22px rgba(120,170,255,0.25)',
-        backdropFilter: 'blur(2px)',
+        background: win11 ? '#f9f9fb' : '#f0f0f0',
+        border: win11 ? '1px solid rgba(0,0,0,0.12)' : '1px solid rgba(60,92,140,0.85)',
+        borderRadius: win11 ? 10 : 8,
+        boxShadow: win11 ? '0 8px 28px rgba(0,0,0,0.28)' : '0 0 0 1px rgba(255,255,255,0.35) inset, 0 10px 34px rgba(0,0,0,0.55), 0 0 22px rgba(120,170,255,0.25)',
+        backdropFilter: win11 ? 'none' : 'blur(2px)',
       }}
     >
       {/* Title bar */}
       <div onMouseDown={startDrag} className="flex items-center justify-between pl-2 pr-0 h-[30px] shrink-0 select-none cursor-default"
-        style={{ background: 'linear-gradient(180deg, rgba(190,220,250,0.92) 0%, rgba(140,185,235,0.9) 45%, rgba(115,165,222,0.92) 100%)', borderBottom: '1px solid rgba(90,130,190,0.6)' }}>
+        style={win11
+          ? { background: '#f3f3f6', borderBottom: '1px solid rgba(0,0,0,0.05)' }
+          : { background: 'linear-gradient(180deg, rgba(190,220,250,0.92) 0%, rgba(140,185,235,0.9) 45%, rgba(115,165,222,0.92) 100%)', borderBottom: '1px solid rgba(90,130,190,0.6)' }} >
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm leading-none">{icon ?? '💳'}</span>
-          <span className="text-[12px] text-[#0c2b52] truncate" style={{ textShadow: '0 1px 1px rgba(255,255,255,0.75)' }}>{title}</span>
+          <span className={`text-[12px] truncate ${win11 ? 'text-[#1b1b1b]' : 'text-[#0c2b52]'}`} style={win11 ? undefined : { textShadow: '0 1px 1px rgba(255,255,255,0.75)' }}>{title}</span>
         </div>
         <div className="flex items-center h-full">
-          <button onClick={() => { setMinimized(true); onMinimize?.(); }} title="Minimize"
-            className="w-[26px] h-[20px] mr-px rounded-[3px] text-white text-[11px] leading-none hover:brightness-110"
-            style={{ background: 'linear-gradient(180deg,#cfe3f8,#8fb8e2)', border: '1px solid #5f88b8', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.8)' }}>—</button>
-          <button title="Maximize" disabled={!resizable}
-            className="w-[26px] h-[20px] mr-px rounded-[3px] text-white text-[10px] leading-none hover:brightness-110 disabled:opacity-60"
-            style={{ background: 'linear-gradient(180deg,#cfe3f8,#8fb8e2)', border: '1px solid #5f88b8', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.8)' }}>▢</button>
-          <button onClick={onClose} title="Close"
-            className="w-[34px] h-[20px] rounded-[3px] text-white text-[11px] font-bold leading-none hover:brightness-110"
-            style={{ background: 'linear-gradient(180deg,#e5a09b,#c8403a 45%,#b12a24)', border: '1px solid #8f201c', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.5)' }}>✕</button>
+          {win11 ? (
+            <>
+              <button onClick={() => { setMinimized(true); onMinimize?.(); }} title="Minimize" className="w-[40px] h-full text-[10px] text-[#1b1b1b] hover:bg-black/[0.05]">—</button>
+              <button title="Maximize" disabled={!resizable} className="w-[40px] h-full text-[10px] text-[#1b1b1b] hover:bg-black/[0.05] disabled:opacity-40">▢</button>
+              <button onClick={onClose} title="Close" className="w-[44px] h-full text-[11px] text-[#1b1b1b] hover:bg-[#c42b1c] hover:text-white rounded-tr-[9px]">✕</button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => { setMinimized(true); onMinimize?.(); }} title="Minimize"
+                className="w-[26px] h-[20px] mr-px rounded-[3px] text-white text-[11px] leading-none hover:brightness-110"
+                style={{ background: 'linear-gradient(180deg,#cfe3f8,#8fb8e2)', border: '1px solid #5f88b8', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.8)' }}>—</button>
+              <button title="Maximize" disabled={!resizable}
+                className="w-[26px] h-[20px] mr-px rounded-[3px] text-white text-[10px] leading-none hover:brightness-110 disabled:opacity-60"
+                style={{ background: 'linear-gradient(180deg,#cfe3f8,#8fb8e2)', border: '1px solid #5f88b8', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.8)' }}>▢</button>
+              <button onClick={onClose} title="Close"
+                className="w-[34px] h-[20px] rounded-[3px] text-white text-[11px] font-bold leading-none hover:brightness-110"
+                style={{ background: 'linear-gradient(180deg,#e5a09b,#c8403a 45%,#b12a24)', border: '1px solid #8f201c', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.5)' }}>✕</button>
+            </>
+          )}
         </div>
       </div>
       <div className="flex-1 min-h-0 flex flex-col bg-white">{children}</div>
@@ -149,15 +172,18 @@ export function ContextMenu({ x, y, items, onClose }: { x: number; y: number; it
     window.addEventListener('contextmenu', close);
     return () => { window.removeEventListener('mousedown', close); window.removeEventListener('contextmenu', close); };
   }, [onClose]);
+  const win11 = useContext(Win11UiCtx);
   return (
-    <div className="fixed z-[200] py-1 rounded-[3px]" onMouseDown={(e) => e.stopPropagation()}
-      style={{ left: x, top: y, minWidth: 220, background: '#ffffff', border: '1px solid #d0d0d0', boxShadow: '0 4px 14px rgba(0,0,0,.25)', ...SEGOE }}>
+    <div className="fixed z-[200] py-1" onMouseDown={(e) => e.stopPropagation()}
+      style={win11
+        ? { left: x, top: y, minWidth: 220, background: 'rgba(249,249,251,0.96)', backdropFilter: 'blur(16px)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.22)', ...SEGOE }
+        : { left: x, top: y, minWidth: 220, background: '#ffffff', border: '1px solid #d0d0d0', borderRadius: 3, boxShadow: '0 4px 14px rgba(0,0,0,.25)', ...SEGOE }}>
       {items.map((it, i) => it.sep ? (
         <div key={i} className="my-[3px] mx-1 border-t border-[#e2e2e2]" />
       ) : (
         <div key={i} onClick={it.disabled ? undefined : () => { it.onClick?.(); onClose(); }}
-          className={`px-4 py-[5px] text-[12px] ${it.disabled ? 'text-gray-400' : 'text-[#1a1a1a] hover:bg-[#cfe4f7]'} cursor-default`}
-          style={{ margin: '0 2px' }}>{it.label}</div>
+          className={`px-4 py-[5px] text-[12px] ${it.disabled ? 'text-gray-400' : win11 ? 'text-[#1a1a1a] hover:bg-black/[0.055]' : 'text-[#1a1a1a] hover:bg-[#cfe4f7]'} cursor-default`}
+          style={win11 ? { margin: '1px 3px', borderRadius: 6 } : { margin: '0 2px' }}>{it.label}</div>
       ))}
     </div>
   );

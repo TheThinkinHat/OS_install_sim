@@ -4,9 +4,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { DriverPackage, VDevice } from './types';
-import { AUTO_SEARCH_SOURCES, DRIVER_PACKAGES, OS_NAME, SYSTEM_ARCH, packagesInFolder } from './data';
-import { listFolder } from './data';
-import { useDrivers, validateDriverPackage } from './service';
+import { AUTO_SEARCH_SOURCES, OS_NAME, SYSTEM_ARCH, packagesInFolder } from './data';
+import { activeFilesystem, catalog, activeProfile, validateDriverPackage } from './service';
+import { listFolder as _lfData } from './data';
+import { useDrivers } from './service';
+const listFolder = (p: string) => _lfData(p, activeFilesystem());
 import { AeroProgress, AeroWindow, DialogHeader, SEGOE, TaskDialog, WinButton, WinCheck } from './ui';
 import { FolderBrowserDialog } from './FolderBrowser';
 
@@ -48,7 +50,7 @@ export function UpdateDriverWizard({ deviceId, onClose }: { deviceId: string; on
   if (!dev) return null;
 
   const startAutoScan = () => {
-    const lines = [`Searching for compatible driver software for "${dev.name}"...`, `OS: ${OS_NAME} (${SYSTEM_ARCH}-bit)`, ''];
+    const lines = [`Searching for compatible driver software for "${dev.name}"...`, `OS: ${activeProfile().osName} (${SYSTEM_ARCH}-bit)`, ''];
     setStage({ s: 'autoscan', log: [...lines], done: false, found: null });
     let i = 0;
     const tick = () => {
@@ -58,7 +60,7 @@ export function UpdateDriverWizard({ deviceId, onClose }: { deviceId: string; on
         timers.current.push(window.setTimeout(tick, 650));
       } else {
         // Best match: newest signed compatible package in store
-        const matches = DRIVER_PACKAGES
+        const matches = catalog()
           .filter((p) => validateDriverPackage(dev, p.id).ok)
           .sort((a, b) => (b.signed ? 1 : 0) - (a.signed ? 1 : 0) || new Date(b.date).getTime() - new Date(a.date).getTime());
         const found = matches[0] ?? null;
@@ -72,7 +74,7 @@ export function UpdateDriverWizard({ deviceId, onClose }: { deviceId: string; on
 
   const runFolderSearch = (folder: string, includeSub: boolean) => {
     const collect = (path: string, depth: number): DriverPackage[] => {
-      const pkgs = [...packagesInFolder(path)];
+      const pkgs = [...packagesInFolder(path, catalog())];
       if (includeSub && depth < 6) {
         for (const node of listFolder(path)) {
           if (node.kind === 'folder') {
@@ -82,7 +84,7 @@ export function UpdateDriverWizard({ deviceId, onClose }: { deviceId: string; on
           // .inf files annotated with packageIds represent packages "in" this folder
           if (node.kind === 'file' && node.packageIds) {
             for (const pid of node.packageIds) {
-              const p = DRIVER_PACKAGES.find((x) => x.id === pid);
+              const p = catalog().find((x) => x.id === pid);
               if (p && !pkgs.includes(p)) pkgs.push(p);
             }
           }
@@ -91,7 +93,7 @@ export function UpdateDriverWizard({ deviceId, onClose }: { deviceId: string; on
         for (const node of listFolder(path)) {
           if (node.kind === 'file' && node.packageIds) {
             for (const pid of node.packageIds) {
-              const p = DRIVER_PACKAGES.find((x) => x.id === pid);
+              const p = catalog().find((x) => x.id === pid);
               if (p && !pkgs.includes(p)) pkgs.push(p);
             }
           }
@@ -152,7 +154,7 @@ export function UpdateDriverWizard({ deviceId, onClose }: { deviceId: string; on
         <div className="flex-1 overflow-y-auto px-6 py-5 bg-white" style={SEGOE}>
           {stage.s === 'choose' && (
             <div>
-              <DialogHeader title="How do you want to locate driver software?" sub={`${dev.name} — ${OS_NAME} (${SYSTEM_ARCH}-bit)`} />
+              <DialogHeader title="How do you want to locate driver software?" sub={`${dev.name} — ${activeProfile().osName} (${SYSTEM_ARCH}-bit)`} />
               <div className="space-y-4 mt-4">
                 <ChoiceTile icon="🔄" title="Search automatically for updated driver software"
                   desc="Windows will search your computer and the Windows Update site (simulated) for driver software."

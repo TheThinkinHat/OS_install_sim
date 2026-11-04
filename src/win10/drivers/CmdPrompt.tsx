@@ -4,7 +4,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { VDevice } from './types';
-import { DRIVER_PACKAGES, OS_BUILD, OS_NAME, SYSTEM_ARCH, listFolder, packageForInfFile } from './data';
+import { OS_BUILD, OS_NAME, SYSTEM_ARCH, packageForInfFile } from './data';
+import { activeFilesystem, catalog, fsListFolder as listFolder } from './service';
 import { classNameOf, evaluateSignature, useDrivers, validateDriverPackage } from './service';
 import { SEGOE } from './ui';
 
@@ -17,7 +18,7 @@ interface CmdCtx {
 }
 
 function findTarget(pkgId: string, devices: VDevice[]): VDevice | undefined {
-  const pkg = DRIVER_PACKAGES.find((p) => p.id === pkgId);
+  const pkg = catalog().find((p) => p.id === pkgId);
   if (!pkg) return undefined;
   return devices.find((d) => [d.hardwareId, ...d.compatibleIds]
     .some((id) => pkg.matchesHardwareIds.map((m) => m.toUpperCase()).includes(id.toUpperCase())));
@@ -83,7 +84,7 @@ function runCommand(raw: string, ctx: CmdCtx): string[] {
       if (!files.length) { out.push(`No matching .inf files were found for: ${pattern.replace(/^"|"$/g, '')}`, '', 'Error: The system cannot find the file specified.'); return out; }
       let published = 0; let installed = 0; let failed = 0;
       for (const f of files) {
-        const pkg = packageForInfFile(f.path, f.fileName);
+        const pkg = packageForInfFile(f.path, f.fileName, activeFilesystem(), catalog());
         if (!pkg) { out.push(`Microsoft PnP Utility`, ``, `Failed to add driver package: ${f.fileName} — not a valid driver package.`); failed++; continue; }
         out.push('Microsoft PnP Utility', '');
         out.push(`Adding driver package:  ${f.fileName}`);
@@ -177,7 +178,7 @@ function runCommand(raw: string, ctx: CmdCtx): string[] {
   if (key === 'whoami') { out.push('user-pc\\user'); return out; }
   if (key === 'hostname') { out.push('USER-PC'); return out; }
   if (key === 'systeminfo') {
-    out.push('', `Host Name:                 USER-PC`, `OS Name:                   ${OS_NAME}`, `OS Version:                10.0.19045 Build 19045`, `OS Architecture:           ${SYSTEM_ARCH}-bit`, `BIOS Version:              American Megatrends Inc. 5.14`, `Processor(s):              1 Intel Core i7-9700K @ 3.60GHz`, `Total Physical Memory:     16,384 MB`, '');
+    out.push('', `Host Name:                 USER-PC`, `OS Name:                   ${OS_NAME}`, `OS Version:                10.0.${OS_BUILD.split(',')[1]?.trim().replace('build ', '').split('.')[0] ?? '19045'} Build ${OS_BUILD.split(',')[1]?.trim().replace('build ', '') ?? '19045.3803'}`, `OS Architecture:           ${SYSTEM_ARCH}-bit`, `BIOS Version:              American Megatrends Inc. 5.14`, `Processor(s):              1 Intel Core i7-9700K @ 3.60GHz`, `Total Physical Memory:     16,384 MB`, '');
     return out;
   }
   if (key === 'cls') { return ['__CLS__']; }
@@ -197,7 +198,7 @@ export function CmdWindow({ onClose, top = 80, left = 120, z = 90 }: { onClose: 
   ctxRef.current = { devices, store, applyPackage, addToStore, requestRestart };
 
   const [lines, setLines] = useState<string[]>([
-    'Microsoft Windows [Version 10.0.19045.3803]',
+    `Microsoft Windows [Version 10.0.${OS_BUILD.split(', ')[1]?.replace('build ', '') ?? '19045.3803'}]`,
     '(c) Microsoft Corporation. All rights reserved.',
     '',
     'This is a SIMULATED command prompt. It only manages the virtual driver',

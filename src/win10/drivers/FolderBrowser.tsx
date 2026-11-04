@@ -1,7 +1,7 @@
 // ── Folder browser dialog (SHBrowseForFolder-style) ──────────────────────────
 
 import { useMemo, useState } from 'react';
-import { DRIVER_FILESYSTEM } from './data';
+import { activeFilesystem } from './service';
 import { SEGOE, TaskDialog, WinButton } from './ui';
 
 const ROOTS = ['C:\\'];
@@ -24,7 +24,7 @@ export function FolderBrowserDialog({ initialPath, onSelect, onClose, title = 'B
   const [selected, setSelected] = useState<string | null>(initialPath ?? null);
 
   const childFolders = (path: string) =>
-    (DRIVER_FILESYSTEM[path] ?? []).filter((n) => n.kind === 'folder').map((n) => (path === 'C:\\' ? `C:\\${n.name}` : `${path}\\${n.name}`));
+    (activeFilesystem()[path] ?? []).filter((n) => n.kind === 'folder').map((n) => (path === 'C:\\' ? `C:\\${n.name}` : `${path}\\${n.name}`));
 
   const hasChildren = (path: string) => childFolders(path).length > 0;
 

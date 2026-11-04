@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { VDevice } from './types';
-import { CATEGORY_LABELS, DEVICE_CATEGORIES } from './data';
-import { statusTextFor, useDrivers } from './service';
+import { CATEGORY_LABELS } from './data';
+import { activeCategories, activeProfile, statusTextFor, useDrivers } from './service';
 import { AeroWindow, ContextMenu, SEGOE, TaskDialog, WarnGlyph, WinButton } from './ui';
 import { DevicePropertiesDialog } from './DeviceProperties';
 import { UpdateDriverWizard } from './UpdateDriverWizard';
@@ -53,7 +53,7 @@ export function DeviceManagerWindow({ onClose, onMinimize, top, left, z }: { onC
 
   const grouped = useMemo(() => {
     const m: Record<string, VDevice[]> = {};
-    for (const c of DEVICE_CATEGORIES) m[c] = [];
+    for (const c of activeCategories()) m[c] = [];
     for (const d of devices) (m[d.category] ??= []).push(d);
     return m;
   }, [devices]);
@@ -127,7 +127,7 @@ export function DeviceManagerWindow({ onClose, onMinimize, top, left, z }: { onC
             <span className="text-[#555]">🖥️</span>
             <span className="text-[#1e2b3b]">{getComputerName()}</span>
           </div>
-          {DEVICE_CATEGORIES.map((cat) => {
+          {activeCategories().map((cat) => {
             const devs = grouped[cat] ?? [];
             const isOpen = !!expanded[cat];
             const label = CATEGORY_LABELS[cat] ?? cat;
@@ -186,7 +186,8 @@ export function DeviceManagerWindow({ onClose, onMinimize, top, left, z }: { onC
 }
 
 function getComputerName(): string {
-  return (window as unknown as { __win7ComputerName?: string }).__win7ComputerName ?? 'USER-PC';
+  const base = (window as unknown as { __win7ComputerName?: string }).__win7ComputerName ?? 'USER-PC';
+  return activeProfile().key === 'win11' ? `${base} (Windows 11)` : base;
 }
 
 function ToolbarBtn({ title, glyph, onClick, disabled }: { title: string; glyph: string; onClick?: () => void; disabled?: boolean }) {
